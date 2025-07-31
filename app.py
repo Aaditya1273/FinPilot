@@ -21,8 +21,9 @@ import pickle
 import zlib
 from io import StringIO
 import csv
+from dotenv import load_dotenv
 
-from flask import Flask, request, jsonify, g, Response
+from flask import Flask, request, jsonify, g, Response, render_template
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -41,8 +42,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 import joblib
 
-from financial_engine import calculate_metrics
+from financial_engine import calculate_metrics, calculate_mrr_arr, calculate_burn_rate_runway, calculate_ltv_cac
 from ai_advisor import initialize_llm, get_advice
+
+load_dotenv()  # Load environment variables from .env file
 
 class Priority(Enum):
     LOW = 1
@@ -388,6 +391,18 @@ ml_predictor = MLPredictor()
 circuit_breaker = CircuitBreaker()
 performance_metrics = PerformanceMetrics()
 
+# --- API Key Management ---
+VALID_API_KEYS = os.getenv("API_KEYS", "").split(',')
+
+def require_api_key(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key = request.headers.get('X-API-Key')
+        if api_key not in VALID_API_KEYS:
+            return jsonify({'error': 'Invalid or missing API key'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
 class AdvancedCalculationSchema(Schema):
     users = fields.Integer(required=True, validate=validate.Range(min=1, max=10000000))
     churn = fields.Float(required=True, validate=validate.Range(min=0.001, max=0.999))
@@ -414,21 +429,6 @@ class EnhancedAdviceSchema(Schema):
     session_id = fields.String(missing=lambda: str(uuid.uuid4()))
     language = fields.String(missing='en', validate=validate.OneOf(['en', 'es', 'fr', 'de']))
     max_response_length = fields.Integer(missing=500, validate=validate.Range(min=100, max=2000))
-
-def require_api_key(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        api_key = request.headers.get('X-API-Key')
-        if not api_key:
-            return jsonify({'error': 'API key required'}), 401
-        
-        valid_keys = os.getenv('API_KEYS', 'dev-key-123,admin-key-456').split(',')
-        if api_key not in valid_keys:
-            return jsonify({'error': 'Invalid API key'}), 401
-        
-        g.api_key = api_key
-        return f(*args, **kwargs)
-    return decorated_function
 
 @app.route('/v2/export', methods=['POST'])
 @require_api_key
@@ -534,13 +534,12 @@ async def async_calculate_enhanced_metrics(data):
 
 @app.route('/v2/calculate', methods=['POST'])
 @require_api_key
-@advanced_rate_limit('calculate', limit=30, window=60)
 def handle_advanced_calculation():
     if not request.is_json:
         raise BadRequest("Content-Type must be application/json")
     
     request_data = request.get_json()
-    data = validate_and_extract(calculation_schema, request_data)
+    data = validate_and_extract(AdvancedCalculationSchema(), request_data)
     
     cached_result = smart_cache.get(data)
     if cached_result:
@@ -588,13 +587,12 @@ def handle_advanced_calculation():
 
 @app.route('/v2/get-advice', methods=['POST'])
 @require_api_key
-@advanced_rate_limit('advice', limit=10, window=60)
 def handle_enhanced_advice():
     if not request.is_json:
         raise BadRequest("Content-Type must be application/json")
     
     request_data = request.get_json()
-    data = validate_and_extract(advice_schema, request_data)
+    data = validate_and_extract(EnhancedAdviceSchema(), request_data)
     
     if not initialize_ai_models():
         raise InternalServerError("AI models not available")
@@ -881,7 +879,6 @@ def optimize_system():
 
 @app.route('/v2/batch-calculate', methods=['POST'])
 @require_api_key
-@advanced_rate_limit('batch_calculate', limit=5, window=60)
 def handle_batch_calculation():
     """Handle multiple calculations in a single request"""
     if not request.is_json:
@@ -899,7 +896,7 @@ def handle_batch_calculation():
     # Process calculations in parallel
     def process_single_calculation(calc_data):
         try:
-            validated_data = calculation_schema.load(calc_data)
+            validated_data = AdvancedCalculationSchema().load(calc_data)
             
             # Check cache first
             cached_result = smart_cache.get(validated_data)
@@ -955,7 +952,6 @@ def handle_batch_calculation():
 
 @app.route('/v2/export', methods=['GET'])
 @require_api_key
-@advanced_rate_limit('export', limit=3, window=300)
 def export_data():
     """Export analytics data in various formats"""
     export_format = request.args.get('format', 'json').lower()
@@ -1024,6 +1020,31 @@ def export_data():
         else:
             raise BadRequest("CSV format only available for 'users' data type")
 
+@app.route('/api/calculate', methods=['POST'])
+@require_api_key
+def api_calculate():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid input'}), 400
+
+    # Extract data for calculations
+    mrr_data = data.get('mrr_data')
+    burn_data = data.get('burn_data')
+    ltv_cac_data = data.get('ltv_cac_data')
+
+    results = {}
+
+    if mrr_data:
+        results['mrr_arr'] = calculate_mrr_arr(mrr_data)
+    
+    if burn_data:
+        results['burn_runway'] = calculate_burn_rate_runway(burn_data)
+
+    if ltv_cac_data:
+        results['ltv_cac'] = calculate_ltv_cac(ltv_cac_data)
+
+    return jsonify(results)
+
 # Add a startup task to initialize ML models
 @app.before_first_request
 def startup_tasks():
@@ -1044,7 +1065,7 @@ def startup_tasks():
     }
     
     try:
-        validated_sample = calculation_schema.load(sample_data)
+        validated_sample = AdvancedCalculationSchema().load(sample_data)
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -1077,4 +1098,3 @@ if __name__ == '__main__':
         threaded=True,
         use_reloader=False  # Disable reloader to prevent double initialization
     )
-    # Calculate time bounda

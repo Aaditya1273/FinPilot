@@ -137,8 +137,72 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="./assets/js/main.js"></script>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.getElementById('financial-form'); 
+            const resultsDiv = document.getElementById('results-section'); 
+
+            if (form) {
+                form.addEventListener('submit', function (event) {
+                    event.preventDefault();
+
+                    const mrrData = {
+                        revenue: parseFloat(document.getElementById('arpu').value) || 0,
+                        customers: parseInt(document.getElementById('users').value) || 0,
+                    };
+
+                    const burnData = {
+                        expenses: parseFloat(document.getElementById('opex').value) || 0,
+                        cash: parseFloat(document.getElementById('initial-capital').value) || 0,
+                    };
+
+                    const ltvCacData = {
+                        ltv: parseFloat(document.getElementById('arpu').value) || 0,
+                        cac: parseFloat(document.getElementById('cac').value) || 0,
+                    };
+
+                    const payload = {
+                        mrr_data: mrrData,
+                        burn_data: burnData,
+                        ltv_cac_data: ltvCacData,
+                    };
+
+                    fetch('/api/calculate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-API-Key': 'YOUR_API_KEY' 
+                        },
+                        body: JSON.stringify(payload)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            resultsDiv.innerHTML = `<p>Error: ${data.error}</p>`;
+                        } else {
+                            let html = '<h3>Calculation Results:</h3>';
+                            if (data.mrr_arr) {
+                                html += `<p><strong>MRR:</strong> $${data.mrr_arr.mrr.toFixed(2)}</p>`;
+                                html += `<p><strong>ARR:</strong> $${data.mrr_arr.arr.toFixed(2)}</p>`;
+                            }
+                            if (data.burn_runway) {
+                                html += `<p><strong>Burn Rate:</strong> $${data.burn_runway.burn_rate.toFixed(2)}/month</p>`;
+                                html += `<p><strong>Runway:</strong> ${data.burn_runway.runway.toFixed(2)} months</p>`;
+                            }
+                            if (data.ltv_cac) {
+                                html += `<p><strong>LTV/CAC Ratio:</strong> ${data.ltv_cac.ratio.toFixed(2)}</p>`;
+                            }
+                            resultsDiv.innerHTML = html;
+                            resultsDiv.classList.remove('hidden');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        resultsDiv.innerHTML = `<p>An error occurred while fetching results.</p>`;
+                    });
+                });
+            }
+        });
+    </script>
 </body>
 </html>
-
-
-
