@@ -8,9 +8,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
 
+    <!-- Notification Container -->
+    <div id="notification-container"></div>
+    
     <div class="container">
         <header class="header">
             <h1>FinPilot</h1>
@@ -24,65 +29,46 @@
                 <form id="financial-form">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="initial-capital">Initial Capital ($)</label>
-                            <input type="number" id="initial-capital" value="100000" required>
+                            <label for="initial_capital">Initial Capital ($)</label>
+                            <input type="number" id="initial_capital" value="100000" required>
                         </div>
                         <div class="form-group">
                             <label for="users">Current Users</label>
                             <input type="number" id="users" value="1000" required>
                         </div>
                         <div class="form-group">
-                            <label for="growth">Monthly Growth (%)</label>
-                            <input type="number" id="growth" value="10" step="0.1" required>
+                            <label for="monthly_growth">Monthly Growth (%)</label>
+                            <input type="number" id="monthly_growth" value="10" step="0.1" required>
                         </div>
                         <div class="form-group">
                             <label for="churn">Monthly Churn (%)</label>
                             <input type="number" id="churn" value="5" step="0.1" required>
                         </div>
                         <div class="form-group">
-                            <label for="arpu">ARPU ($)</label>
-                            <input type="number" id="arpu" value="50" required>
+                            <label for="ltv">ARPU ($)</label>
+                            <input type="number" id="ltv" value="50" required>
                         </div>
                         <div class="form-group">
                             <label for="cogs">COGS (%)</label>
                             <input type="number" id="cogs" value="20" step="0.1" required>
                         </div>
                         <div class="form-group">
-                            <label for="opex">Monthly OPEX ($)</label>
-                            <input type="number" id="opex" value="15000" required>
+                            <label for="monthly_expenses">Monthly OPEX ($)</label>
+                            <input type="number" id="monthly_expenses" value="15000" required>
                         </div>
                         <div class="form-group">
                             <label for="cac">CAC ($)</label>
                             <input type="number" id="cac" value="100" required>
                         </div>
                     </div>
-                    <button type="submit" id="generate-button" class="btn btn-primary" style="width: 100%; margin-top: 2rem;" color="Black">
-                        <span>Generate Model</span>
-                    </button>
+                    <button type="submit" id="generate-btn" class="btn btn-primary">Generate Model</button>
                 </form>
             </section>
 
             <!-- Results Section -->
-            <section id="results-section" class="card hidden">
-                <h2 class="section-title">Key Metrics</h2>
-                <div id="metrics-grid" class="metrics-grid">
-                    <div class="metric-card">
-                        <div class="metric-label">Monthly Recurring Revenue</div>
-                        <div id="mrr-metric" class="metric-value">$0</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Capital Remaining</div>
-                        <div id="capital-metric" class="metric-value">$0</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">LTV / CAC Ratio</div>
-                        <div id="ltv-cac-metric" class="metric-value">0</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">Burn Rate</div>
-                        <div id="burn-rate-metric" class="metric-value">$0</div>
-                    </div>
-                </div>
+            <section id="results-container" class="results-section" style="display: none;">
+                <div id="spinner" class="spinner" style="display: none;"></div>
+                <div id="results-content"></div>
             </section>
 
             <!-- Visuals Section -->
@@ -117,91 +103,115 @@
         </main>
     </div>
 
-    <!-- API Key Modal -->
-    <div id="api-key-modal" class="modal-overlay hidden">
-        <div class="card modal-content">
-            <h2 class="section-title">API Key Required</h2>
-            <p>Please enter your API key to use FinPilot. You can get a key from the project documentation.</p>
-            <form id="api-key-form">
-                <input type="password" id="api-key-input" class="form-group" placeholder="Enter your API key..." style="width:100%">
-                <div id="modal-error" style="color: var(--danger); min-height: 1.25rem; margin-top: 0.5rem;"></div>
-                <button type="submit" class="btn btn-primary" style="width:100%; margin-top: 1rem;">Save Key</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Notification Container -->
-    <div id="notification-container"></div>
-
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="./assets/js/main.js"></script>
-
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const form = document.getElementById('financial-form'); 
-            const resultsDiv = document.getElementById('results-section'); 
+        document.addEventListener('DOMContentLoaded', () => {
+            // Ensure this runs only once.
+            if (window.fundPilotApp) {
+                return;
+            }
 
-            if (form) {
-                form.addEventListener('submit', function (event) {
+            class FundPilot {
+                constructor() {
+                    this.API_ENDPOINT = 'http://127.0.0.1:5000/v2/calculate';
+
+                    this.elements = {
+                        form: document.getElementById('financial-form'),
+                        resultsContainer: document.getElementById('results-container'),
+                        notificationContainer: document.getElementById('notification-container'),
+                        generateBtn: document.getElementById('generate-btn'),
+                        spinner: document.getElementById('spinner'),
+                        resultsContent: document.getElementById('results-content'),
+                    };
+
+                    this.bindEvents();
+                }
+
+                bindEvents() {
+                    if (this.elements.form) this.elements.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+                }
+
+                async handleFormSubmit(event) {
                     event.preventDefault();
+                    this.toggleSpinner(true);
 
-                    const mrrData = {
-                        revenue: parseFloat(document.getElementById('arpu').value) || 0,
-                        customers: parseInt(document.getElementById('users').value) || 0,
-                    };
-
-                    const burnData = {
-                        expenses: parseFloat(document.getElementById('opex').value) || 0,
-                        cash: parseFloat(document.getElementById('initial-capital').value) || 0,
-                    };
-
-                    const ltvCacData = {
-                        ltv: parseFloat(document.getElementById('arpu').value) || 0,
+                    const formData = {
+                        users: parseInt(document.getElementById('users').value) || 0,
+                        churn: parseFloat(document.getElementById('churn').value) / 100.0,
+                        ltv: parseFloat(document.getElementById('ltv').value) || 0,
+                        monthly_expenses: parseFloat(document.getElementById('monthly_expenses').value) || 0,
+                        initial_capital: parseFloat(document.getElementById('initial_capital').value) || 0,
                         cac: parseFloat(document.getElementById('cac').value) || 0,
                     };
 
-                    const payload = {
-                        mrr_data: mrrData,
-                        burn_data: burnData,
-                        ltv_cac_data: ltvCacData,
-                    };
+                    try {
+                        const response = await fetch(this.API_ENDPOINT, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(formData)
+                        });
 
-                    fetch('/api/calculate', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-API-Key': 'YOUR_API_KEY' 
-                        },
-                        body: JSON.stringify(payload)
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.error) {
-                            resultsDiv.innerHTML = `<p>Error: ${data.error}</p>`;
-                        } else {
-                            let html = '<h3>Calculation Results:</h3>';
-                            if (data.mrr_arr) {
-                                html += `<p><strong>MRR:</strong> $${data.mrr_arr.mrr.toFixed(2)}</p>`;
-                                html += `<p><strong>ARR:</strong> $${data.mrr_arr.arr.toFixed(2)}</p>`;
-                            }
-                            if (data.burn_runway) {
-                                html += `<p><strong>Burn Rate:</strong> $${data.burn_runway.burn_rate.toFixed(2)}/month</p>`;
-                                html += `<p><strong>Runway:</strong> ${data.burn_runway.runway.toFixed(2)} months</p>`;
-                            }
-                            if (data.ltv_cac) {
-                                html += `<p><strong>LTV/CAC Ratio:</strong> ${data.ltv_cac.ratio.toFixed(2)}</p>`;
-                            }
-                            resultsDiv.innerHTML = html;
-                            resultsDiv.classList.remove('hidden');
+                        const result = await response.json();
+
+                        if (!response.ok) {
+                            const errorDetails = result.details ? JSON.stringify(result.details) : result.error;
+                            throw new Error(errorDetails || `HTTP error! status: ${response.status}`);
                         }
-                    })
-                    .catch(error => {
+
+                        this.updateUI(result.data);
+
+                    } catch (error) {
                         console.error('Error:', error);
-                        resultsDiv.innerHTML = `<p>An error occurred while fetching results.</p>`;
-                    });
-                });
+                        this.handleApiError(error);
+                    } finally {
+                        this.toggleSpinner(false);
+                    }
+                }
+
+                updateUI(data) {
+                    if (!data || !data.summary_metrics) {
+                        this.handleApiError(new Error('Invalid data structure received from server.'));
+                        return;
+                    }
+                    const metrics = data.summary_metrics;
+                    this.elements.resultsContent.innerHTML = `
+                        <h3>Summary Metrics</h3>
+                        <ul>
+                            ${Object.entries(metrics).map(([key, value]) => `<li><strong>${this.formatMetricName(key)}:</strong> ${this.formatMetricValue(value)}</li>`).join('')}
+                        </ul>`;
+                    this.elements.resultsContainer.style.display = 'block';
+                }
+
+                handleApiError(error) {
+                    this.showNotification(`API Error: ${error.message}`, 'error');
+                }
+
+                toggleSpinner(show) {
+                    if (this.elements.spinner) this.elements.spinner.style.display = show ? 'block' : 'none';
+                }
+
+                showNotification(message, type = 'info') {
+                    const notification = document.createElement('div');
+                    notification.className = `notification ${type}`;
+                    notification.textContent = message;
+                    this.elements.notificationContainer.appendChild(notification);
+                    setTimeout(() => notification.remove(), 5000);
+                }
+
+                formatMetricName(name) {
+                    return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                }
+
+                formatMetricValue(value) {
+                    if (typeof value === 'number') {
+                        return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                    }
+                    return value;
+                }
             }
+
+            window.fundPilotApp = new FundPilot();
         });
     </script>
 </body>

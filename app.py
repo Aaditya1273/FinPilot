@@ -23,7 +23,7 @@ from io import StringIO
 import csv
 from dotenv import load_dotenv
 
-from flask import Flask, request, jsonify, g, Response, render_template
+from flask import Flask, request, jsonify, g, Response, render_template, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -44,6 +44,14 @@ import joblib
 
 from financial_engine import calculate_metrics, calculate_mrr_arr, calculate_burn_rate_runway, calculate_ltv_cac
 from ai_advisor import initialize_llm, get_advice
+
+def initialize_ai_models():
+    """Initialize AI models for advice generation"""
+    try:
+        return initialize_llm()
+    except Exception as e:
+        logger.error(f"Failed to initialize AI models: {e}")
+        return False
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -410,10 +418,10 @@ class AdvancedCalculationSchema(Schema):
     monthly_expenses = fields.Float(required=True, validate=validate.Range(min=0, max=10000000))
     initial_capital = fields.Float(required=True, validate=validate.Range(min=0, max=100000000))
     cac = fields.Float(required=True, validate=validate.Range(min=0.01, max=10000))
-    market_segment = fields.String(missing='B2B', validate=validate.OneOf(['B2B', 'B2C', 'B2B2C']))
-    industry = fields.String(missing='Technology')
-    prediction_horizon = fields.Integer(missing=12, validate=validate.Range(min=1, max=60))
-    include_ml_predictions = fields.Boolean(missing=True)
+    market_segment = fields.String(load_default='B2B', validate=validate.OneOf(['B2B', 'B2C', 'B2B2C']))
+    industry = fields.String(load_default='Technology')
+    prediction_horizon = fields.Integer(load_default=12, validate=validate.Range(min=1, max=60))
+    include_ml_predictions = fields.Boolean(load_default=True)
     
     @post_load
     def validate_business_logic(self, data, **kwargs):
@@ -423,12 +431,12 @@ class AdvancedCalculationSchema(Schema):
 
 class EnhancedAdviceSchema(Schema):
     prompt = fields.String(required=True, validate=validate.Length(min=10, max=2000))
-    context = fields.Dict(missing={})
-    priority = fields.Enum(Priority, missing=Priority.NORMAL)
-    user_id = fields.String(missing=lambda: str(uuid.uuid4()))
-    session_id = fields.String(missing=lambda: str(uuid.uuid4()))
-    language = fields.String(missing='en', validate=validate.OneOf(['en', 'es', 'fr', 'de']))
-    max_response_length = fields.Integer(missing=500, validate=validate.Range(min=100, max=2000))
+    context = fields.Dict(load_default={})
+    priority = fields.Enum(Priority, load_default=Priority.NORMAL)
+    user_id = fields.String(load_default=lambda: str(uuid.uuid4()))
+    session_id = fields.String(load_default=lambda: str(uuid.uuid4()))
+    language = fields.String(load_default='en', validate=validate.OneOf(['en', 'es', 'fr', 'de']))
+    max_response_length = fields.Integer(load_default=500, validate=validate.Range(min=100, max=2000))
 
 @app.route('/v2/export', methods=['POST'])
 @require_api_key
@@ -513,7 +521,8 @@ def validate_and_extract(schema, data):
     try:
         return schema.load(data)
     except ValidationError as e:
-        raise BadRequest(f"Validation error: {e.messages}")
+        # Re-raise the original ValidationError so the handler can catch it
+        raise e
 
 async def async_calculate_enhanced_metrics(data):
     try:
@@ -533,46 +542,60 @@ async def async_calculate_enhanced_metrics(data):
         raise
 
 @app.route('/v2/calculate', methods=['POST'])
-@require_api_key
+# @require_api_key
 def handle_advanced_calculation():
     if not request.is_json:
-        raise BadRequest("Content-Type must be application/json")
-    
-    request_data = request.get_json()
-    data = validate_and_extract(AdvancedCalculationSchema(), request_data)
-    
-    cached_result = smart_cache.get(data)
-    if cached_result:
-        performance_metrics.cache_hits += 1
-        log_request_to_db('/v2/calculate', data, time.time() - g.start_time, 200)
-        return jsonify({
-            'success': True,
-            'data': cached_result,
-            'cached': True,
-            'timestamp': int(time.time()),
-            'request_id': g.request_id,
-            'processing_time': f"{time.time() - g.start_time:.3f}s"
-        }), 200
-    
-    performance_metrics.cache_misses += 1
-    
+        return jsonify({'success': False, 'error': 'Invalid Content-Type', 'message': 'Request must be application/json'}), 400
+
     try:
-        def calculate_with_circuit_breaker():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                return loop.run_until_complete(async_calculate_enhanced_metrics(data))
-            finally:
-                loop.close()
+        request_data = request.get_json()
+        if not request_data:
+            return jsonify({'success': False, 'error': 'Bad Request', 'message': 'No JSON data received'}), 400
+
+        # Use the CORRECT schema that matches the simple frontend form
+        validated_data = validate_and_extract(FinancialInputSchema(), request_data)
+
+        # The financial_engine expects a simple dictionary.
+        calculation_data = validated_data
+
+        # Check cache with the clean data
+        cached_result = smart_cache.get(str(calculation_data))
+        if cached_result:
+            performance_metrics.cache_hits += 1
+            return jsonify({
+                'success': True,
+                'data': {'summary_metrics': cached_result},
+                'request_id': g.get('request_id', 'unknown')
+            })
+
+        # If not in cache, calculate, then cache the result
+        results = financial_engine.calculate_metrics(calculation_data)
+        smart_cache.set(str(calculation_data), results)
+        performance_metrics.cache_misses += 1
+
+        response_data = {
+            'success': True,
+            'data': {'summary_metrics': results},
+            'request_id': g.get('request_id', 'unknown')
+        }
         
-        results = circuit_breaker.call(calculate_with_circuit_breaker)
-        smart_cache.set(data, results, ttl=300)
-        
-        log_request_to_db('/v2/calculate', data, time.time() - g.start_time, 200)
+        return jsonify(response_data), 200
+
+    except ValidationError as e:
+        # The app-level handler will format this into a 400 JSON response
+        raise e
+    except Exception as e:
+        # Catch any other unexpected errors during calculation
+        current_app.logger.error(f"Unhandled error in calculation: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Internal Server Error',
+            'message': 'An unexpected error occurred during calculation.'
+        }), 500
         
         return jsonify({
             'success': True,
-            'data': results,
+            'data': {'summary_metrics': results},
             'cached': False,
             'timestamp': int(time.time()),
             'request_id': g.request_id,
@@ -939,7 +962,7 @@ def handle_batch_calculation():
     
     return jsonify({
         'success': True,
-        'results': results,
+        'results': [{'data': {'summary_metrics': r['data']}, **r} if r['success'] else r for r in results],
         'summary': {
             'total_calculations': len(calculations),
             'successful': successful_calcs,
@@ -950,9 +973,9 @@ def handle_batch_calculation():
         'request_id': g.request_id
     }), 200
 
-@app.route('/v2/export', methods=['GET'])
+@app.route('/v2/export/analytics', methods=['GET'])
 @require_api_key
-def export_data():
+def export_analytics_data():
     """Export analytics data in various formats"""
     export_format = request.args.get('format', 'json').lower()
     data_type = request.args.get('type', 'analytics').lower()
@@ -1045,42 +1068,27 @@ def api_calculate():
 
     return jsonify(results)
 
-# Add a startup task to initialize ML models
-@app.before_first_request
-def startup_tasks():
-    """Perform startup initialization tasks"""
-    logger.info("FundPilot API starting up...")
-    
-    # Initialize AI models
-    initialize_ai_models()
-    
-    # Warm up cache with common calculations
-    sample_data = {
-        'users': 1000,
-        'churn': 0.1,
-        'ltv': 500,
-        'monthly_expenses': 10000,
-        'initial_capital': 100000,
-        'cac': 50
-    }
-    
-    try:
-        validated_sample = AdvancedCalculationSchema().load(sample_data)
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(async_calculate_enhanced_metrics(validated_sample))
-            smart_cache.set(validated_sample, result, ttl=3600)
-            logger.info("Cache warmed up with sample calculation")
-        finally:
-            loop.close()
-    except Exception as e:
-        logger.warning(f"Cache warmup failed: {e}")
-    
-    logger.info("FundPilot API startup complete")
+# Serve the main index.html file
+@app.route('/')
+def serve_index():
+    return send_from_directory('calculative', 'index.html')
+
+# Serve static assets from the assets directory
+@app.route('/assets/<path:path>')
+def serve_static_assets(path):
+    return send_from_directory('calculative/assets', path)
+
+# Serve static files like CSS and JS
+@app.route('/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('calculative', filename)
 
 # Register cleanup function
 atexit.register(lambda: executor.shutdown(wait=True))
+
+@app.before_first_request
+def startup_tasks():
+    pass
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))

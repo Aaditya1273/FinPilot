@@ -118,3 +118,4 @@ secrets.py
 api_keys.txt
 *.key
 *.pem
+.env

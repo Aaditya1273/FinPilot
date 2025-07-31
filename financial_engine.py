@@ -93,50 +93,92 @@ class FinancialCalculator:
             return value
     
     def calculate_metrics(self, data: Dict) -> Dict:
+        """Calculate all financial metrics from input data"""
         try:
             inputs = FinancialInputs(
-                users=max(0, int(data.get('users', 0))),
-                churn_rate=min(100.0, max(0.0, float(data.get('churn', 0.0)))),
-                ltv=max(0.0, float(data.get('ltv', 0.0))),
-                monthly_expenses=max(0.0, float(data.get('monthly_expenses', 0.0))),
-                initial_capital=max(0.0, float(data.get('initial_capital', 0.0))),
-                cac=max(0.0, float(data.get('cac', 0.0)))
+                users=data['users'],
+                churn_rate=data['churn'],
+                ltv=data['ltv'],
+                monthly_expenses=data['monthly_expenses'],
+                initial_capital=data['initial_capital'],
+                cac=data['cac']
             )
-        except (ValueError, TypeError) as e:
-            raise ValueError(f"Invalid input data: {str(e)}")
-        
-        core_metrics = self._cached_core_metrics(inputs)
-        advanced_metrics = self._calculate_advanced_metrics(inputs, core_metrics[4])
-        
-        metrics = FinancialMetrics(
-            mrr=self._round_value(core_metrics[0]),
-            arr=self._round_value(core_metrics[1]),
-            churn_loss=self._round_value(core_metrics[2]),
-            burn_rate=self._round_value(core_metrics[3]),
-            runway=self._round_value(self._calculate_runway(core_metrics[3], inputs.initial_capital)),
-            cac=self._round_value(inputs.cac),
-            ltv=self._round_value(inputs.ltv),
-            ltv_cac_ratio=self._round_value(advanced_metrics[0]),
-            payback_period=self._round_value(advanced_metrics[1]),
-            growth_efficiency=self._round_value(advanced_metrics[2]),
-            profitability=self._round_value(advanced_metrics[3]),
-            break_even_users=self._round_value(advanced_metrics[4])
-        )
-        
-        return {k: v for k, v in metrics.__dict__.items()}
-
+            
+            # Get core metrics
+            mrr, arr, churn_loss, burn_rate, arpu = self._cached_core_metrics(inputs)
+            
+            # Calculate runway
+            runway = self._calculate_runway(burn_rate, inputs.initial_capital)
+            
+            # Calculate advanced metrics
+            ltv_cac_ratio, payback_period, growth_efficiency, profitability, break_even = self._calculate_advanced_metrics(inputs, arpu)
+            
+            # Create and return results
+            return {
+                'mrr': self._round_value(mrr),
+                'arr': self._round_value(arr),
+                'churn_loss': self._round_value(churn_loss),
+                'burn_rate': self._round_value(burn_rate),
+                'runway': self._round_value(runway) if isinstance(runway, (int, float)) else runway,
+                'cac': self._round_value(inputs.cac),
+                'ltv': self._round_value(inputs.ltv),
+                'ltv_cac_ratio': self._round_value(ltv_cac_ratio) if isinstance(ltv_cac_ratio, (int, float)) else ltv_cac_ratio,
+                'payback_period': self._round_value(payback_period) if isinstance(payback_period, (int, float)) else payback_period,
+                'growth_efficiency': self._round_value(growth_efficiency) if isinstance(growth_efficiency, (int, float)) else growth_efficiency,
+                'profitability': self._round_value(profitability) if isinstance(profitability, (int, float)) else profitability,
+                'break_even_users': self._round_value(break_even) if isinstance(break_even, (int, float)) else break_even
+            }
+            
+        except KeyError as e:
+            raise ValueError(f"Missing required field: {e}")
+        except Exception as e:
+            raise ValueError(f"Error calculating metrics: {str(e)}")
+    
     def batch_calculate(self, scenarios: List[Dict]) -> List[Dict]:
-        return [self.calculate_metrics(scenario) for scenario in scenarios]
+        return [calculate_metrics(scenario) for scenario in scenarios]
     
     def scenario_analysis(self, base_data: Dict, variations: Dict[str, Dict]) -> Dict[str, Dict]:
-        base_result = self.calculate_metrics(base_data)
-        return {
-            scenario: self.calculate_metrics({**base_data, **changes})
-            for scenario, changes in variations.items()
-        } | {'base': base_result}
+        base_result = calculate_metrics(base_data)
+        result = {scenario: calculate_metrics({**base_data, **changes}) 
+                 for scenario, changes in variations.items()}
+        result['base'] = base_result
+        return result
+
+# Add these functions at the end of the file, before the if __name__ == '__main__' block
 
 def calculate_metrics(data: Dict) -> Dict:
-    return FinancialCalculator().calculate_metrics(data)
+    """Standalone function to calculate all financial metrics"""
+    calculator = FinancialCalculator()
+    return calculator.calculate_metrics(data)
+
+def calculate_mrr_arr(data: Dict) -> Dict:
+    """Calculate Monthly Recurring Revenue (MRR) and Annual Recurring Revenue (ARR)"""
+    calculator = FinancialCalculator()
+    metrics = calculator.calculate_metrics(data)
+    return {
+        'mrr': metrics['mrr'],
+        'arr': metrics['arr']
+    }
+
+def calculate_burn_rate_runway(data: Dict) -> Dict:
+    """Calculate burn rate and runway"""
+    calculator = FinancialCalculator()
+    metrics = calculator.calculate_metrics(data)
+    return {
+        'burn_rate': metrics['burn_rate'],
+        'runway': metrics['runway']
+    }
+
+def calculate_ltv_cac(data: Dict) -> Dict:
+    """Calculate LTV, CAC, and related metrics"""
+    calculator = FinancialCalculator()
+    metrics = calculator.calculate_metrics(data)
+    return {
+        'ltv': metrics['ltv'],
+        'cac': metrics['cac'],
+        'ltv_cac_ratio': metrics['ltv_cac_ratio'],
+        'payback_period': metrics['payback_period']
+    }
 
 if __name__ == '__main__':
     import json

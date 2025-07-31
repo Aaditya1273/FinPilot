@@ -375,4 +375,5 @@ class FinPilot {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => new FundPilot());
+// Use the correct class name that was defined above
+document.addEventListener('DOMContentLoaded', () => new FinPilot());

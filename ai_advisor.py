@@ -1,42 +1,28 @@
-import threading
-import time
-import asyncio
-import weakref
-from functools import lru_cache, wraps
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional, Dict, Any, List, Generator, Union, Callable
-from contextlib import contextmanager
-from dataclasses import dataclass, field
-from llama_cpp import Llama
-import gc
-import psutil
 import os
+import time
+import threading
+import logging
+from typing import Optional, Dict, Any, List, Generator, Union, Callable
+from functools import lru_cache, wraps
+from dataclasses import dataclass
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
 
 @dataclass
 class ModelConfig:
-    model_path: str = "./Meta-Llama-3-8B-Instruct.Q4_K_M.gguf"
-    n_ctx: int = 8192
-    n_batch: int = 1024
-    n_gpu_layers: int = -1
-    n_threads: int = field(default_factory=lambda: os.cpu_count() or 4)
-    use_mlock: bool = True
-    use_mmap: bool = True
-    rope_freq_base: float = 10000.0
-    rope_scaling_type: int = 1
-    flash_attn: bool = True
-    verbose: bool = False
-
-@dataclass
-class QueryParams:
-    max_tokens: int = 1024
+    api_key: str = os.getenv("API_KEYS")
+    model_name: str = "gemini-1.5-pro"
     temperature: float = 0.7
     top_p: float = 0.9
     top_k: int = 40
-    repeat_penalty: float = 1.1
-    min_p: float = 0.05
-    typical_p: float = 1.0
-    tfs_z: float = 1.0
-    mirostat: int = 0
+    max_output_tokens: int = 1024
 
 class PerformanceMonitor:
     def __init__(self):
@@ -62,8 +48,7 @@ class PerformanceMonitor:
                 "queries": self._stats["queries"],
                 "avg_response_time": self._stats["total_time"] / total,
                 "error_rate": self._stats["errors"] / total,
-                "cache_hit_rate": self._stats["cache_hits"] / total,
-                "memory_usage_mb": psutil.Process().memory_info().rss / 1024 / 1024
+                "cache_hit_rate": self._stats["cache_hits"] / total
             }
 
 def performance_monitor(func: Callable) -> Callable:
@@ -79,128 +64,128 @@ def performance_monitor(func: Callable) -> Callable:
             raise e
     return wrapper
 
-class AdvancedLLMEngine:
-    _instances = weakref.WeakValueDictionary()
-    _global_lock = threading.RLock()
-    _executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="llm_async")
+class GeminiEngine:
+    _instance = None
+    _lock = threading.RLock()
     
-    def __new__(cls, config_id: str = "default"):
-        with cls._global_lock:
-            if config_id not in cls._instances:
-                instance = super().__new__(cls)
-                cls._instances[config_id] = instance
-                instance._initialized = False
-            return cls._instances[config_id]
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(GeminiEngine, cls).__new__(cls)
+                cls._instance._initialized = False
+            return cls._instance
     
-    def __init__(self, config_id: str = "default"):
+    def __init__(self):
         if self._initialized:
             return
             
-        self._config_id = config_id
         self._config = ModelConfig()
-        self._params = QueryParams()
-        self._model = None
-        self._error = None
         self._monitor = PerformanceMonitor()
         self._cache_lock = threading.RLock()
-        self._model_lock = threading.RLock()
+        self._model = None
+        self._error = None
         self._initialized = True
-        self._load_model()
+        self._initialize_model()
     
-    def _load_model(self):
+    def _initialize_model(self):
         try:
-            with self._model_lock:
-                if self._model:
-                    del self._model
-                    gc.collect()
-                
-                model_config = {
-                    "model_path": self._config.model_path,
-                    "n_ctx": self._config.n_ctx,
-                    "n_batch": self._config.n_batch,
-                    "n_gpu_layers": self._config.n_gpu_layers,
-                    "n_threads": self._config.n_threads,
-                    "use_mlock": self._config.use_mlock,
-                    "use_mmap": self._config.use_mmap,
-                    "rope_freq_base": self._config.rope_freq_base,
-                    "rope_scaling_type": self._config.rope_scaling_type,
-                    "flash_attn": self._config.flash_attn,
-                    "verbose": self._config.verbose,
-                    "embedding": False,
-                    "logits_all": False
-                }
-                
-                self._model = Llama(**model_config)
-                self._error = None
+            genai.configure(api_key=self._config.api_key)
+            self._model = genai.GenerativeModel(self._config.model_name)
+            self._error = None
+            logger.info(f"Initialized Gemini model: {self._config.model_name}")
         except Exception as e:
             self._error = str(e)
             self._model = None
+            logger.error(f"Failed to initialize Gemini model: {str(e)}")
     
     @lru_cache(maxsize=256)
-    def _build_prompt(self, prompt: str, system: str = "", format_type: str = "llama3") -> str:
-        if format_type == "llama3":
-            sys_part = f"<|start_header_id|>system<|end_header_id|>\n\n{system}<|eot_id|>" if system else ""
-            return f"<|begin_of_text|>{sys_part}<|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-        elif format_type == "chatml":
-            sys_part = f"<|im_start|>system\n{system}<|im_end|>\n" if system else ""
-            return f"{sys_part}<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
-        return prompt
+    def _build_prompt(self, prompt: str, system: str = "") -> Dict[str, Any]:
+        generation_config = {
+            "temperature": self._config.temperature,
+            "top_p": self._config.top_p,
+            "top_k": self._config.top_k,
+            "max_output_tokens": self._config.max_output_tokens,
+        }
+        
+        # Combine system prompt and user prompt if system prompt is provided
+        if system:
+            content = f"{system}\n\n{prompt}"
+        else:
+            content = prompt
+            
+        return {
+            "contents": [{"role": "user", "parts": [content]}],
+            "generation_config": generation_config
+        }
     
     @performance_monitor
     def query(self, prompt: str, system: str = "", **kwargs) -> str:
         if not self._model:
             raise RuntimeError(f"Model unavailable: {self._error}")
         
-        params = {**self._params.__dict__, **kwargs}
-        input_text = self._build_prompt(prompt, system)
-        
-        generation_params = {
-            "prompt": input_text,
-            "max_tokens": params["max_tokens"],
-            "temperature": params["temperature"],
-            "top_p": params["top_p"],
-            "top_k": params["top_k"],
-            "repeat_penalty": params["repeat_penalty"],
-            "min_p": params["min_p"],
-            "typical_p": params["typical_p"],
-            "tfs_z": params["tfs_z"],
-            "mirostat": params["mirostat"],
-            "stop": ["<|eot_id|>", "<|end_of_text|>", "<|im_end|>"],
-            "echo": False
+        # Override default config with any provided kwargs
+        generation_config = {
+            "temperature": kwargs.get("temperature", self._config.temperature),
+            "top_p": kwargs.get("top_p", self._config.top_p),
+            "top_k": kwargs.get("top_k", self._config.top_k),
+            "max_output_tokens": kwargs.get("max_tokens", self._config.max_output_tokens),
         }
         
-        with self._model_lock:
-            response = self._model(**generation_params)
-            return response["choices"][0]["text"].strip()
+        try:
+            # Prepare the prompt
+            if system:
+                content = f"{system}\n\n{prompt}"
+            else:
+                content = prompt
+                
+            # Generate response
+            response = self._model.generate_content(
+                content,
+                generation_config=generation_config
+            )
+            
+            return response.text
+        except Exception as e:
+            logger.error(f"Error during query: {str(e)}")
+            raise
     
     def stream(self, prompt: str, system: str = "", **kwargs) -> Generator[str, None, None]:
         if not self._model:
             raise RuntimeError(f"Model unavailable: {self._error}")
         
-        params = {**self._params.__dict__, **kwargs}
-        input_text = self._build_prompt(prompt, system)
-        
-        generation_params = {
-            "prompt": input_text,
-            "max_tokens": params["max_tokens"],
-            "temperature": params["temperature"],
-            "top_p": params["top_p"],
-            "top_k": params["top_k"],
-            "repeat_penalty": params["repeat_penalty"],
-            "stop": ["<|eot_id|>", "<|end_of_text|>"],
-            "echo": False,
-            "stream": True
+        # Override default config with any provided kwargs
+        generation_config = {
+            "temperature": kwargs.get("temperature", self._config.temperature),
+            "top_p": kwargs.get("top_p", self._config.top_p),
+            "top_k": kwargs.get("top_k", self._config.top_k),
+            "max_output_tokens": kwargs.get("max_tokens", self._config.max_output_tokens),
         }
         
-        with self._model_lock:
-            for chunk in self._model(**generation_params):
-                if chunk["choices"][0]["text"]:
-                    yield chunk["choices"][0]["text"]
+        try:
+            # Prepare the prompt
+            if system:
+                content = f"{system}\n\n{prompt}"
+            else:
+                content = prompt
+                
+            # Generate streaming response
+            response = self._model.generate_content(
+                content,
+                generation_config=generation_config,
+                stream=True
+            )
+            
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            logger.error(f"Error during streaming: {str(e)}")
+            raise
     
     def batch_query(self, prompts: List[str], max_concurrent: int = 4, **kwargs) -> List[str]:
         results = [None] * len(prompts)
         
-        with ThreadPoolExecutor(max_workers=min(max_concurrent, len(prompts))) as executor:
+        with threading.ThreadPoolExecutor(max_workers=min(max_concurrent, len(prompts))) as executor:
             future_to_index = {
                 executor.submit(self.query, prompt, **kwargs): i 
                 for i, prompt in enumerate(prompts)
@@ -215,63 +200,43 @@ class AdvancedLLMEngine:
         
         return results
     
-    async def async_query(self, prompt: str, **kwargs) -> str:
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(self._executor, self.query, prompt, **kwargs)
-    
-    @contextmanager
-    def configure(self, **config_updates):
-        original_config = {k: getattr(self._config, k) for k in config_updates.keys()}
-        original_params = {k: getattr(self._params, k) for k in config_updates.keys() if hasattr(self._params, k)}
-        
-        try:
-            for key, value in config_updates.items():
-                if hasattr(self._config, key):
-                    setattr(self._config, key, value)
-                elif hasattr(self._params, key):
-                    setattr(self._params, key, value)
-            
-            if any(hasattr(self._config, k) for k in config_updates.keys()):
-                self._load_model()
-            
-            yield self
-        finally:
-            for key, value in original_config.items():
-                setattr(self._config, key, value)
-            for key, value in original_params.items():
-                setattr(self._params, key, value)
-    
-    def optimize_memory(self):
-        with self._cache_lock:
-            self._build_prompt.cache_clear()
-            gc.collect()
-    
     def health_check(self) -> Dict[str, Any]:
         return {
             "model_loaded": self._model is not None,
             "error": self._error,
-            "config_id": self._config_id,
+            "model_name": self._config.model_name,
             "cache_info": self._build_prompt.cache_info()._asdict(),
             "metrics": self._monitor.metrics
         }
     
-    def reload(self):
-        self._load_model()
-        self.optimize_memory()
+    def optimize_memory(self):
+        with self._cache_lock:
+            self._build_prompt.cache_clear()
     
-    @classmethod
-    def shutdown_all(cls):
-        cls._executor.shutdown(wait=True)
-        for instance in cls._instances.values():
-            if instance._model:
-                del instance._model
-        cls._instances.clear()
-        gc.collect()
+    def reload(self):
+        self._initialize_model()
+        self.optimize_memory()
 
-llm = AdvancedLLMEngine()
-query = llm.query
-stream = llm.stream
-batch_query = llm.batch_query
-async_query = llm.async_query
-health = llm.health_check
-optimize = llm.optimize_memory
+# Create a singleton instance
+engine = GeminiEngine()
+
+# Public API functions to maintain compatibility with the existing code
+def initialize_llm():
+    """Initialize the LLM engine"""
+    engine.reload()
+    return engine.health_check()["model_loaded"]
+
+def get_advice(prompt: str, system_prompt: str = "") -> str:
+    """Get financial advice from the LLM"""
+    try:
+        return engine.query(prompt, system=system_prompt)
+    except Exception as e:
+        logger.error(f"Error getting advice: {str(e)}")
+        return f"Sorry, I encountered an error: {str(e)}"
+
+# Additional functions that match the original API
+query = engine.query
+stream = engine.stream
+batch_query = engine.batch_query
+health = engine.health_check
+optimize = engine.optimize_memory
