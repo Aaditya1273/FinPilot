@@ -7,30 +7,30 @@
 /*  1. Root & Variables */
 /* ------------------- */
 :root {
-    --primary-hue: 244;
-    --accent-hue: 260;
-    --success-hue: 158;
-    --warning-hue: 34;
+    --primary-hue: 0; /* Pure white */
+    --accent-hue: 0;  /* Pure white */
+    --success-hue: 0;
+    --warning-hue: 0;
     --danger-hue: 0;
 
-    --primary: hsl(var(--primary-hue), 80%, 60%);
-    --accent: hsl(var(--accent-hue), 80%, 65%);
-    --success: hsl(var(--success-hue), 60%, 50%);
-    --warning: hsl(var(--warning-hue), 90%, 60%);
-    --danger: hsl(var(--danger-hue), 70%, 55%);
+    --primary: #ffffff;
+    --accent: #ffffff;
+    --success: #ffffff;
+    --warning: #ffffff;
+    --danger: #ffffff;
 
-    --bg-dark: #0d1117;
-    --bg-med: #161b22;
-    --bg-light: #21262d;
+    --bg-dark: #000000;
+    --bg-med: rgba(255, 255, 255, 0.08);
+    --bg-light: rgba(255, 255, 255, 0.12);
     
-    --text-primary: #e6edf3;
-    --text-secondary: #8b949e;
-    --border-color: #30363d;
-    --border-focus: var(--primary);
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --border-color: rgba(255, 255, 255, 0.2);
+    --border-focus: rgba(255, 255, 255, 0.5);
 
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.1);
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.2);
-    --shadow-lg: 0 10px 30px rgba(0,0,0,0.3);
+    --shadow-sm: 0 1px 2px rgba(255, 255, 255, 0.05);
+    --shadow-md: 0 4px 12px rgba(255, 255, 255, 0.1);
+    --shadow-lg: 0 10px 30px rgba(255, 255, 255, 0.15);
 
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --radius-sm: 6px;
@@ -52,7 +52,7 @@
 
 body {
     font-family: var(--font-sans);
-    background-color: var(--bg-dark);
+    background-color: #000000;
     color: var(--text-primary);
     line-height: 1.6;
     font-synthesis: none;
@@ -78,7 +78,7 @@ body {
 .header h1 {
     font-size: clamp(2.5rem, 8vw, 4rem);
     font-weight: 800;
-    background: linear-gradient(120deg, var(--primary), var(--accent));
+    background: linear-gradient(120deg, #ffffff, rgba(255, 255, 255, 0.7));
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -103,11 +103,13 @@ body {
     margin-bottom: 2rem;
     box-shadow: var(--shadow-md);
     transition: all var(--transition);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
 }
 
 .card:hover {
-    border-color: hsl(var(--primary-hue), 80%, 70%);
-    box-shadow: 0 0 30px hsla(var(--primary-hue), 80%, 50%, 0.2);
+    border-color: var(--border-focus);
+    box-shadow: var(--shadow-lg);
 }
 
 .section-title {
@@ -155,13 +157,15 @@ body {
     font-size: 1rem;
     font-family: inherit;
     transition: all var(--transition);
+    backdrop-filter: blur(8px) saturate(180%);
+    -webkit-backdrop-filter: blur(8px) saturate(180%);
 }
 
 .form-group input:focus,
 .form-group textarea:focus {
     outline: none;
     border-color: var(--border-focus);
-    box-shadow: 0 0 0 3px hsla(var(--primary-hue), 80%, 60%, 0.2);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
 }
 
 .form-group input.is-invalid {
@@ -189,26 +193,29 @@ body {
 }
 
 .btn-primary {
-    background: var(--primary);
-    color: #fff;
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.3);
     box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(8px) saturate(180%);
+    -webkit-backdrop-filter: blur(8px) saturate(180%);
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: hsl(var(--primary-hue), 80%, 65%);
+    background: rgba(255, 255, 255, 0.25);
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
 }
 
 .btn-secondary {
-    background: var(--bg-light);
+    background: rgba(255, 255, 255, 0.08);
     color: var(--text-primary);
     border-color: var(--border-color);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: var(--bg-dark);
-    border-color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.15);
+    border-color: var(--border-focus);
 }
 
 .btn:disabled {
@@ -239,11 +246,14 @@ body {
 }
 
 .metric-card {
-    background-color: var(--bg-light);
+    background-color: rgba(255, 255, 255, 0.08);
     padding: 1.5rem;
     border-radius: var(--radius-md);
     text-align: center;
     transition: all var(--transition);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .metric-card.updated {
