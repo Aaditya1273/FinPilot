@@ -1,0 +1,420 @@
+/*================================================================================
+    FinPilot UI - Refined Stylesheet
+    Author: Cascade AI
+================================================================================*/
+
+/* ------------------- */
+/*  1. Root & Variables */
+/* ------------------- */
+:root {
+    --primary-hue: 244;
+    --accent-hue: 260;
+    --success-hue: 158;
+    --warning-hue: 34;
+    --danger-hue: 0;
+
+    --primary: hsl(var(--primary-hue), 80%, 60%);
+    --accent: hsl(var(--accent-hue), 80%, 65%);
+    --success: hsl(var(--success-hue), 60%, 50%);
+    --warning: hsl(var(--warning-hue), 90%, 60%);
+    --danger: hsl(var(--danger-hue), 70%, 55%);
+
+    --bg-dark: #0d1117;
+    --bg-med: #161b22;
+    --bg-light: #21262d;
+    
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --border-color: #30363d;
+    --border-focus: var(--primary);
+
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.1);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.2);
+    --shadow-lg: 0 10px 30px rgba(0,0,0,0.3);
+
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --transition: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ------------------- */
+/*  2. Base & Body     */
+/* ------------------- */
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-dark);
+    color: var(--text-primary);
+    line-height: 1.6;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: clamp(1rem, 5vw, 3rem);
+}
+
+/* ------------------- */
+/*  3. Header          */
+/* ------------------- */
+.header {
+    text-align: center;
+    margin-bottom: 4rem;
+}
+
+.header h1 {
+    font-size: clamp(2.5rem, 8vw, 4rem);
+    font-weight: 800;
+    background: linear-gradient(120deg, var(--primary), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+}
+
+.header p {
+    font-size: clamp(1rem, 4vw, 1.25rem);
+    color: var(--text-secondary);
+    max-width: 60ch;
+    margin: 0 auto;
+}
+
+/* ------------------- */
+/*  4. Card & Sections */
+/* ------------------- */
+.card {
+    background-color: var(--bg-med);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: clamp(1.5rem, 5vw, 2.5rem);
+    margin-bottom: 2rem;
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition);
+}
+
+.card:hover {
+    border-color: hsl(var(--primary-hue), 80%, 70%);
+    box-shadow: 0 0 30px hsla(var(--primary-hue), 80%, 50%, 0.2);
+}
+
+.section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.section-title::before {
+    content: '';
+    width: 4px;
+    height: 24px;
+    background: var(--primary);
+    border-radius: 2px;
+}
+
+/* ------------------- */
+/*  5. Forms           */
+/* ------------------- */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background-color: var(--bg-light);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-family: inherit;
+    transition: all var(--transition);
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px hsla(var(--primary-hue), 80%, 60%, 0.2);
+}
+
+.form-group input.is-invalid {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px hsla(var(--danger-hue), 70%, 55%, 0.2);
+}
+
+/* ------------------- */
+/*  6. Buttons         */
+/* ------------------- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.8rem 1.5rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: #fff;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: hsl(var(--primary-hue), 80%, 65%);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.btn-secondary {
+    background: var(--bg-light);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--bg-dark);
+    border-color: var(--text-secondary);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn .loading-spinner {
+    width: 1em;
+    height: 1em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ------------------- */
+/*  7. Results & Metrics */
+/* ------------------- */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.metric-card {
+    background-color: var(--bg-light);
+    padding: 1.5rem;
+    border-radius: var(--radius-md);
+    text-align: center;
+    transition: all var(--transition);
+}
+
+.metric-card.updated {
+    animation: flash 0.7s ease;
+}
+
+@keyframes flash {
+    0% { background-color: hsla(var(--primary-hue), 80%, 60%, 0.2); }
+    100% { background-color: var(--bg-light); }
+}
+
+.metric-card .metric-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.metric-card .metric-value {
+    font-size: clamp(1.5rem, 5vw, 2.25rem);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* ------------------- */
+/*  8. Charts          */
+/* ------------------- */
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 2rem;
+}
+
+.chart-container {
+    height: 350px;
+}
+
+/* ------------------- */
+/*  9. AI Advisor      */
+/* ------------------- */
+.ai-input-group {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+#ai-prompt {
+    flex-grow: 1;
+    min-height: 52px;
+    resize: vertical;
+}
+
+.ai-response-area {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background-color: var(--bg-dark);
+    border-radius: var(--radius-md);
+    min-height: 100px;
+}
+
+.ai-response-area .prose {
+    color: var(--text-secondary);
+}
+
+.ai-response-area .prose h1, .ai-response-area .prose h2, .ai-response-area .prose h3 {
+    color: var(--text-primary);
+}
+
+.skeleton-loader {
+    width: 100%;
+    height: 1.2em;
+    background: linear-gradient(90deg, var(--bg-light) 25%, var(--border-color) 50%, var(--bg-light) 75%);
+    background-size: 200% 100%;
+    border-radius: var(--radius-sm);
+    animation: skeleton 1.5s infinite linear;
+    margin-bottom: 0.75rem;
+}
+
+.skeleton-loader:last-child { margin-bottom: 0; }
+
+@keyframes skeleton {
+    to { background-position: -200% 0; }
+}
+
+/* ------------------- */
+/*  10. Modal          */
+/* ------------------- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(13, 17, 23, 0.8);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    animation: fadeIn 0.3s forwards;
+}
+
+.modal-content {
+    width: 90%;
+    max-width: 480px;
+}
+
+@keyframes fadeIn {
+    to { opacity: 1; }
+}
+
+/* ------------------- */
+/*  11. Notifications  */
+/* ------------------- */
+#notification-container {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.notification {
+    min-width: 300px;
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    background-color: var(--bg-light);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-lg);
+    transform: translateX(calc(100% + 1.5rem));
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.notification.show {
+    transform: translateX(0);
+}
+
+.notification-success { border-left: 4px solid var(--success); }
+.notification-error { border-left: 4px solid var(--danger); }
+.notification-info { border-left: 4px solid var(--primary); }
+
+/* ------------------- */
+/*  12. Utilities      */
+/* ------------------- */
+.hidden { display: none !important; }
+
+/* ------------------- */
+/*  13. Responsive     */
+/* ------------------- */
+@media (max-width: 768px) {
+    .ai-input-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .metrics-grid {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+}
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--surface);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+}

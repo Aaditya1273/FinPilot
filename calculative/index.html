@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinPilot - Advanced AI Financial Modeling</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+    <div class="container">
+        <header class="header">
+            <h1>FinPilot</h1>
+            <p>Your Advanced AI Financial Modeling Co-Pilot</p>
+        </header>
+
+        <main>
+            <!-- Input Form -->
+            <section id="form-section" class="card">
+                <h2 class="section-title">Financial Inputs</h2>
+                <form id="financial-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="initial-capital">Initial Capital ($)</label>
+                            <input type="number" id="initial-capital" value="100000" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="users">Current Users</label>
+                            <input type="number" id="users" value="1000" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="growth">Monthly Growth (%)</label>
+                            <input type="number" id="growth" value="10" step="0.1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="churn">Monthly Churn (%)</label>
+                            <input type="number" id="churn" value="5" step="0.1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="arpu">ARPU ($)</label>
+                            <input type="number" id="arpu" value="50" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="cogs">COGS (%)</label>
+                            <input type="number" id="cogs" value="20" step="0.1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="opex">Monthly OPEX ($)</label>
+                            <input type="number" id="opex" value="15000" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="cac">CAC ($)</label>
+                            <input type="number" id="cac" value="100" required>
+                        </div>
+                    </div>
+                    <button type="submit" id="generate-button" class="btn btn-primary" style="width: 100%; margin-top: 2rem;">
+                        <span>Generate Model</span>
+                    </button>
+                </form>
+            </section>
+
+            <!-- Results Section -->
+            <section id="results-section" class="card hidden">
+                <h2 class="section-title">Key Metrics</h2>
+                <div id="metrics-grid" class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Monthly Recurring Revenue</div>
+                        <div id="mrr-metric" class="metric-value">$0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Capital Remaining</div>
+                        <div id="capital-metric" class="metric-value">$0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">LTV / CAC Ratio</div>
+                        <div id="ltv-cac-metric" class="metric-value">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Burn Rate</div>
+                        <div id="burn-rate-metric" class="metric-value">$0</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Visuals Section -->
+            <section id="visuals-section" class="card hidden">
+                <h2 class="section-title">Financial Projections</h2>
+                <div class="charts-grid">
+                    <div class="chart-container"><canvas id="mrr-chart"></canvas></div>
+                    <div class="chart-container"><canvas id="capital-chart"></canvas></div>
+                    <div class="chart-container"><canvas id="unit-economics-chart"></canvas></div>
+                </div>
+            </section>
+
+            <!-- AI Advisor Section -->
+            <section id="ai-advisor-section" class="card hidden">
+                <h2 class="section-title">AI Advisor</h2>
+                <div class="ai-input-group">
+                    <textarea id="ai-prompt" class="form-group" placeholder="Ask for advice, e.g., 'How can I improve my LTV/CAC ratio?'"></textarea>
+                    <button id="get-advice-button" class="btn btn-secondary">Get Advice</button>
+                </div>
+                <div class="ai-response-area">
+                    <div id="ai-response-content" class="prose">Your AI-powered insights will appear here...</div>
+                </div>
+            </section>
+
+            <!-- Export Section -->
+            <section id="export-section" class="card hidden">
+                <h2 class="section-title">Export</h2>
+                <div style="text-align: center;">
+                    <button id="export-button" class="btn btn-secondary">Export Combined Chart (PNG)</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- API Key Modal -->
+    <div id="api-key-modal" class="modal-overlay hidden">
+        <div class="card modal-content">
+            <h2 class="section-title">API Key Required</h2>
+            <p>Please enter your API key to use FinPilot. You can get a key from the project documentation.</p>
+            <form id="api-key-form">
+                <input type="password" id="api-key-input" class="form-group" placeholder="Enter your API key..." style="width:100%">
+                <div id="modal-error" style="color: var(--danger); min-height: 1.25rem; margin-top: 0.5rem;"></div>
+                <button type="submit" class="btn btn-primary" style="width:100%; margin-top: 1rem;">Save Key</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notification-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="./assets/js/main.js"></script>
+
+</body>
+</html>
+
+
+
