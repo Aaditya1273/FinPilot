@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="assets/css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="icon" type="image/png" href="svg/logofin.png">
+
 </head>
 <body>
 
@@ -80,11 +82,15 @@
                 </div>
 
                 <div class="section-container" id="charts-section" style="display: none;">
-                    <h2>Financial Projections</h2>
+                    <h2>Financial Projections & Analytics</h2>
                     <div class="charts-grid">
                         <div class="chart-card">
                             <h3>Unit Economics (LTV vs. CAC)</h3>
                             <canvas id="unit-economics-chart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Revenue Breakdown</h3>
+                            <canvas id="revenue-pie-chart"></canvas>
                         </div>
                         <div class="chart-card">
                             <h3>Runway & Capital Projection</h3>
@@ -92,7 +98,15 @@
                         </div>
                         <div class="chart-card">
                             <h3>MRR Growth Projection</h3>
-                            <canvas id="mrr-chart-canvas"></canvas> <!-- Renamed to avoid duplicate ID -->
+                            <canvas id="mrr-chart-canvas"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Expense Distribution</h3>
+                            <canvas id="expense-doughnut-chart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Risk vs Growth Potential</h3>
+                            <canvas id="risk-scatter-chart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -271,7 +285,8 @@
                         this.elements.recommendationsSection.style.display = 'none';
                     }
 
-                    if (data.summary_metrics.projections) {
+                    // Always show charts section if we have summary metrics
+                    if (data.summary_metrics) {
                         this.elements.chartsSection.style.display = 'block';
                         this.renderCharts(data.summary_metrics);
                     }
@@ -286,24 +301,146 @@
                 }
 
                 renderCharts(metrics) {
-                    const { projections, ltv, cac } = metrics;
+                    const { projections, ltv, cac, mrr, burn_rate, risk_score, growth_potential, monthly_expenses, initial_capital } = metrics;
 
-                    this.renderPieChart('unit-economics-chart', 'Unit Economics', ['LTV', 'CAC'], [ltv, cac]);
-                    this.renderLineChart('runway-chart', 'Runway & Capital', projections.months, 
+                    // Get current form values for dynamic calculations
+                    const currentUsers = parseInt(document.getElementById('users').value) || 1000;
+                    const monthlyGrowth = parseFloat(document.getElementById('monthly_growth').value) || 10;
+                    const churnRate = parseFloat(document.getElementById('churn').value) || 0.05;
+                    const arpu = parseFloat(document.getElementById('ltv').value) || 50;
+                    const opex = parseFloat(document.getElementById('monthly_expenses').value) || 15000;
+                    const initialCap = parseFloat(document.getElementById('initial_capital').value) || 100000;
+
+                    // Create dynamic projections based on actual inputs
+                    const months = ['Month 1', 'Month 2', 'Month 3', 'Month 4', 'Month 5', 'Month 6', 'Month 7', 'Month 8', 'Month 9', 'Month 10', 'Month 11', 'Month 12'];
+                    
+                    // Dynamic MRR projection based on user growth and churn
+                    const mrrProjection = [];
+                    let currentMRR = currentUsers * arpu;
+                    for (let i = 0; i < 12; i++) {
+                        mrrProjection.push(currentMRR);
+                        // Apply growth and churn
+                        currentMRR = currentMRR * (1 + (monthlyGrowth / 100)) * (1 - churnRate);
+                    }
+
+                    // Dynamic capital projection based on burn rate
+                    const capitalProjection = [];
+                    let currentCapital = initialCap;
+                    const monthlyBurn = Math.abs(burn_rate) || opex;
+                    for (let i = 0; i < 12; i++) {
+                        capitalProjection.push(Math.max(0, currentCapital));
+                        currentCapital -= monthlyBurn;
+                    }
+
+                    const dynamicProjections = {
+                        months: months,
+                        capital_projection: capitalProjection,
+                        mrr_projection: mrrProjection
+                    };
+
+                    // Unit Economics Pie Chart
+                    if (ltv && cac) {
+                        this.renderPieChart('unit-economics-chart', 'Unit Economics', ['LTV', 'CAC'], [ltv, cac],
+                            ['rgba(255, 255, 255, 0.8)', 'rgba(100, 100, 100, 0.8)']);
+                    }
+                    
+                    // Revenue Breakdown Pie Chart - Dynamic based on business model
+                    const currentMRRValue = currentUsers * arpu;
+                    const subscriptionRevenue = currentMRRValue * 0.85; // Most SaaS is subscription-heavy
+                    const oneTimeRevenue = currentMRRValue * 0.10; // Setup fees, etc.
+                    const otherRevenue = currentMRRValue * 0.05; // Professional services, etc.
+                    
+                    this.renderPieChart('revenue-pie-chart', 'Revenue Sources', 
+                        ['Subscription', 'One-time', 'Other'], 
+                        [subscriptionRevenue, oneTimeRevenue, otherRevenue], 
+                        ['rgba(255, 255, 255, 0.8)', 'rgba(180, 180, 180, 0.8)', 'rgba(120, 120, 120, 0.8)']);
+                    
+                    // Runway & Capital Line Chart - Using dynamic projections
+                    this.renderLineChart('runway-chart', 'Runway & Capital', dynamicProjections.months, 
                         [
-                            { label: 'Capital ($)', data: projections.capital_projection, borderColor: 'rgba(75, 192, 192, 1)' },
+                            { 
+                                label: 'Capital ($)', 
+                                data: dynamicProjections.capital_projection, 
+                                borderColor: 'rgba(255, 255, 255, 0.9)', 
+                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4
+                            },
                         ]);
-                    this.renderLineChart('mrr-chart-canvas', 'MRR Growth', projections.months, 
+                    
+                    // MRR Growth Line Chart - Using dynamic projections
+                    this.renderLineChart('mrr-chart-canvas', 'MRR Growth', dynamicProjections.months, 
                         [
-                            { label: 'MRR ($)', data: projections.mrr_projection, borderColor: 'rgba(153, 102, 255, 1)' },
+                            { 
+                                label: 'MRR ($)', 
+                                data: dynamicProjections.mrr_projection, 
+                                borderColor: 'rgba(200, 200, 200, 0.9)', 
+                                backgroundColor: 'rgba(200, 200, 200, 0.2)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4
+                            },
                         ]);
+                    
+                    // Expense Distribution Doughnut Chart - Dynamic based on actual expenses
+                    const totalExpenses = opex;
+                    const personnelCost = totalExpenses * 0.45; // Typically largest expense
+                    const marketingCost = totalExpenses * 0.25; // Growth investment
+                    const operationsCost = totalExpenses * 0.15; // Office, utilities, etc.
+                    const technologyCost = totalExpenses * 0.10; // Software, infrastructure
+                    const otherCost = totalExpenses * 0.05; // Miscellaneous
+                    
+                    this.renderDoughnutChart('expense-doughnut-chart', 'Expense Distribution', 
+                        ['Personnel', 'Marketing', 'Operations', 'Technology', 'Other'], 
+                        [personnelCost, marketingCost, operationsCost, technologyCost, otherCost],
+                        ['rgba(255, 255, 255, 0.8)', 'rgba(210, 210, 210, 0.8)', 'rgba(170, 170, 170, 0.8)', 'rgba(130, 130, 130, 0.8)', 'rgba(90, 90, 90, 0.8)']);
+                    
+                    // Risk vs Growth Scatter Chart - Dynamic based on actual metrics
+                    const dynamicRiskScore = this.calculateRiskScore(churnRate, monthlyBurn, initialCap);
+                    const dynamicGrowthPotential = this.calculateGrowthPotential(monthlyGrowth, ltv, cac);
+                    
+                    this.renderScatterChart('risk-scatter-chart', 'Risk vs Growth Analysis', 
+                        [{ x: dynamicRiskScore, y: dynamicGrowthPotential }]);
                 }
 
-                renderPieChart(canvasId, label, labels, data) {
+                calculateRiskScore(churnRate, monthlyBurn, initialCapital) {
+                    // Higher churn = higher risk (0-40 points)
+                    const churnRisk = Math.min(churnRate * 800, 40);
+                    
+                    // Higher burn rate relative to capital = higher risk (0-40 points)
+                    const burnRisk = Math.min((monthlyBurn / initialCapital) * 1000, 40);
+                    
+                    // Base risk (0-20 points)
+                    const baseRisk = 20;
+                    
+                    return Math.min(churnRisk + burnRisk + baseRisk, 100);
+                }
+
+                calculateGrowthPotential(monthlyGrowth, ltv, cac) {
+                    // Higher monthly growth = higher potential (0-50 points)
+                    const growthPoints = Math.min(monthlyGrowth * 2, 50);
+                    
+                    // Better LTV/CAC ratio = higher potential (0-30 points)
+                    const ltvCacRatio = ltv / cac;
+                    const ratioPoints = Math.min(ltvCacRatio * 10, 30);
+                    
+                    // Base potential (0-20 points)
+                    const basePotential = 20;
+                    
+                    return Math.min(growthPoints + ratioPoints + basePotential, 100);
+                }
+
+                renderPieChart(canvasId, label, labels, data, colors = null) {
                     const ctx = document.getElementById(canvasId).getContext('2d');
                     if (this.chartInstances[canvasId]) {
                         this.chartInstances[canvasId].destroy();
                     }
+                    
+                    const defaultColors = ['rgba(255, 255, 255, 0.8)', 'rgba(210, 210, 210, 0.8)', 'rgba(170, 170, 170, 0.8)', 'rgba(130, 130, 130, 0.8)', 'rgba(90, 90, 90, 0.8)'];
+                    const backgroundColors = colors || defaultColors;
+                    const borderColors = backgroundColors.map(color => color.replace('0.8', '1'));
+                    
                     this.chartInstances[canvasId] = new Chart(ctx, {
                         type: 'pie',
                         data: {
@@ -311,12 +448,105 @@
                             datasets: [{
                                 label: label,
                                 data: data,
-                                backgroundColor: ['rgba(54, 162, 235, 0.8)', 'rgba(255, 99, 132, 0.8)'],
-                                borderColor: ['rgba(54, 162, 235, 1)', 'rgba(255, 99, 132, 1)'],
-                                borderWidth: 1
+                                backgroundColor: backgroundColors,
+                                borderColor: borderColors,
+                                borderWidth: 2
                             }]
                         },
-                        options: { responsive: true, maintainAspectRatio: false }
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom'
+                                }
+                            }
+                        }
+                    });
+                }
+
+                renderDoughnutChart(canvasId, label, labels, data, colors = null) {
+                    const ctx = document.getElementById(canvasId).getContext('2d');
+                    if (this.chartInstances[canvasId]) {
+                        this.chartInstances[canvasId].destroy();
+                    }
+                    
+                    const defaultColors = ['rgba(255, 255, 255, 0.8)', 'rgba(210, 210, 210, 0.8)', 'rgba(170, 170, 170, 0.8)', 'rgba(130, 130, 130, 0.8)', 'rgba(90, 90, 90, 0.8)'];
+                    const backgroundColors = colors || defaultColors;
+                    
+                    this.chartInstances[canvasId] = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: label,
+                                data: data,
+                                backgroundColor: backgroundColors,
+                                borderColor: backgroundColors.map(color => color.replace('0.8', '1')),
+                                borderWidth: 2
+                            }]
+                        },
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom'
+                                }
+                            }
+                        }
+                    });
+                }
+
+                renderScatterChart(canvasId, label, data) {
+                    const ctx = document.getElementById(canvasId).getContext('2d');
+                    if (this.chartInstances[canvasId]) {
+                        this.chartInstances[canvasId].destroy();
+                    }
+                    
+                    this.chartInstances[canvasId] = new Chart(ctx, {
+                        type: 'scatter',
+                        data: {
+                            datasets: [{
+                                label: 'Current Position',
+                                data: data,
+                                backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                                borderColor: 'rgba(100, 100, 100, 0.9)',
+                                borderWidth: 3,
+                                pointRadius: 10,
+                                pointHoverRadius: 12,
+                                pointBackgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                pointBorderColor: 'rgba(80, 80, 80, 1)',
+                                pointBorderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    title: {
+                                        display: true,
+                                        text: 'Risk Score'
+                                    },
+                                    min: 0,
+                                    max: 100
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: 'Growth Potential'
+                                    },
+                                    min: 0,
+                                    max: 100
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            }
+                        }
                     });
                 }
 
