@@ -189,16 +189,7 @@ python app.py
 
 ---
 
-## 📈 Roadmap
 
-- [ ] **PDF Export**: Generate professional financial reports
-- [ ] **AI Advisor**: Enhanced LLaMA integration for insights
-- [ ] **Database Integration**: PostgreSQL for data persistence
-- [ ] **API Endpoints**: RESTful API for external integrations
-- [ ] **Advanced Analytics**: Machine learning predictions
-- [ ] **Team Collaboration**: Multi-user workspace features
-
----
 
 ## 🤝 Contributing
 
@@ -229,14 +220,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 👨‍💻 Author
 
-**Aaditya Sharma**
-- GitHub: [@Aaditya1273](https://github.com/Aaditya1273)
-- LinkedIn: [Connect with me](https://linkedin.com/in/aaditya-sharma)
-- Email: aaditya.sharma@example.com
 
----
+
+
 
 ## 🙏 Acknowledgments
 
