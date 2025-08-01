@@ -1197,10 +1197,10 @@ atexit.register(lambda: executor.shutdown(wait=True))
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     debug = os.getenv('DEBUG', 'True').lower() == 'true'
-    host = os.getenv('HOST', '127.0.0.1')
+    host = os.getenv('HOST', '0.0.0.0')  # Changed for Vercel compatibility
     
     logger.info("=" * 60)
-    logger.info("🚀 Starting FundPilot API Server")
+    logger.info("🚀 Starting FinPilot API Server")
     logger.info("=" * 60)
     logger.info(f"📍 Host: {host}")
     logger.info(f"🔌 Port: {port}")
@@ -1222,3 +1222,6 @@ if __name__ == '__main__':
     except Exception as e:
         logger.error(f"❌ Failed to start server: {e}")
         sys.exit(1)
+
+# Add this line at the very end for Vercel compatibility
+application = app

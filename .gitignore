@@ -33,7 +33,6 @@ venv.bak/
 # Flask
 instance/
 .webassets-cache
-.env
 .flaskenv
 
 # Database
@@ -85,7 +84,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 
-# Environment variables
+# Environment variables (keep actual .env private but allow .env.example)
 .env
 .env.local
 .env.development.local
@@ -118,4 +117,12 @@ secrets.py
 api_keys.txt
 *.key
 *.pem
-.env
+
+# Vercel deployment files (ALLOW these for deployment)
+# vercel.json - ALLOWED for deployment configuration
+# .vercel/ - Vercel build cache (should be ignored)
+.vercel/
+
+# Allow important deployment files
+!vercel.json
+!.env.example
