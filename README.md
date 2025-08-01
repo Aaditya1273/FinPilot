@@ -13,7 +13,7 @@ FinPilot is a cutting-edge financial modeling platform that combines advanced an
 
 ---
 
-## ✨ Key Features
+## ✨ Key Features:
 
 ### 🎨 **Stunning Colorful Glassmorphism Design**
 - **Vibrant Color Palette**: Beautiful multi-color gradient charts with transparency effects
@@ -64,7 +64,7 @@ All charts are **fully dynamic** and respond to real user inputs:
 
 ---
 
-## 🚀 Tech Stack
+## 🚀 Tech Stack:
 
 ### **Frontend**
 - **HTML5/CSS3**: Modern semantic markup with advanced CSS features
