@@ -1,379 +1,363 @@
-document.addEventListener('DOMContentLoaded', () => {
-    new FinPilot();
-});
+// 🔥 FIXED FRONTEND JAVASCRIPT WITH PROPER ERROR HANDLING
+// Add this to your HTML or existing JS file
 
-class FinPilot {
-    constructor() {
-        this.charts = new Map();
-        this.apiKey = localStorage.getItem('finpilot_api_key') || null;
-        this.modelData = null;
+class FundPilotAPI {
+    constructor(baseUrl = 'http://127.0.0.1:5000') {
+        this.baseUrl = baseUrl;
+        this.apiKey = 'test-key-123'; // Use your actual API key
+    }
 
-        this.config = {
-            baseURL: 'http://127.0.0.1:5000/v2',
-            retryAttempts: 3,
-            retryDelay: 1000,
-            debounceMs: 300,
+    /**
+     * Make a safe API request with comprehensive error handling
+     */
+    async makeRequest(endpoint, data = null, method = 'GET') {
+        const url = `${this.baseUrl}${endpoint}`;
+        console.log(`📡 Making ${method} request to:`, url);
+        console.log('📦 Request data:', data);
+
+        const options = {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-API-Key': this.apiKey
+            }
         };
 
-        this.elements = this.getElements();
-        this.init();
-    }
-
-    init() {
-        this.bindEvents();
-        this.configureChartJs();
-        this.checkApiKey();
-    }
-
-    getElements() {
-        const elementIds = [
-            'financial-form', 'generate-button', 'results-section', 'visuals-section',
-            'ai-advisor-section', 'export-section', 'metrics-grid', 'mrr-metric',
-            'capital-metric', 'ltv-cac-metric', 'burn-rate-metric', 'mrr-chart',
-            'capital-chart', 'unit-economics-chart', 'ai-prompt', 'get-advice-button',
-            'ai-response-content', 'export-button', 'api-key-modal', 'api-key-form',
-            'api-key-input', 'modal-error', 'notification-container'
-        ];
-        return elementIds.reduce((acc, id) => {
-            const camelCaseId = id.replace(/-(\w)/g, (_, c) => c.toUpperCase());
-            acc[camelCaseId] = document.getElementById(id);
-            return acc;
-        }, {});
-    }
-
-    bindEvents() {
-        this.elements.financialForm?.addEventListener('submit', this.handleGenerate.bind(this));
-        this.elements.getAdviceButton?.addEventListener('click', this.handleGetAdvice.bind(this));
-        this.elements.exportButton?.addEventListener('click', this.handleExport.bind(this));
-        this.elements.apiKeyForm?.addEventListener('submit', this.handleApiKeySubmit.bind(this));
-    }
-
-    configureChartJs() {
-        const style = getComputedStyle(document.body);
-        Chart.defaults.color = style.getPropertyValue('--text-secondary').trim();
-        Chart.defaults.borderColor = style.getPropertyValue('--border-color').trim();
-        Chart.defaults.font.family = style.getPropertyValue('--font-sans');
-    }
-
-    checkApiKey() {
-        if (!this.apiKey) {
-            this.showModal(true);
+        if (data && (method === 'POST' || method === 'PUT')) {
+            options.body = JSON.stringify(data);
         }
-    }
-
-    showModal(visible) {
-        this.elements.apiKeyModal?.classList.toggle('hidden', !visible);
-    }
-
-    handleApiKeySubmit(event) {
-        event.preventDefault();
-        const newKey = this.elements.apiKeyInput.value.trim();
-        if (newKey) {
-            this.apiKey = newKey;
-            localStorage.setItem('finpilot_api_key', newKey);
-            this.elements.modalError.textContent = '';
-            this.showModal(false);
-            this.showNotification('API Key saved successfully!', 'success');
-        } else {
-            this.elements.modalError.textContent = 'Please enter a valid API key.';
-        }
-    }
-
-    collectFormData() {
-        const form = this.elements.financialForm;
-        if (!form) return null;
-
-        const data = {};
-        const inputs = form.querySelectorAll('input[type="number"]');
-        inputs.forEach(input => {
-            const key = input.id.replace(/-/g, '_');
-            data[key] = parseFloat(input.value) || 0;
-        });
-        return data;
-    }
-
-    async handleGenerate(event) {
-        event.preventDefault();
-        if (!this.elements.financialForm.checkValidity()) {
-            this.showNotification('Please fill in all required fields.', 'error');
-            return;
-        }
-
-        this.setButtonLoading(this.elements.generateButton, true);
 
         try {
-            const formData = this.collectFormData();
-            const results = await this.apiCall('/calculate', { model_config: formData });
-            this.modelData = results; // Store the full results
-            this.updateUI(results);
-            this.showSections(true);
-            this.showNotification('Financial model generated successfully!', 'success');
-        } catch (error) {
-            this.handleApiError(error);
-        } finally {
-            this.setButtonLoading(this.elements.generateButton, false);
-        }
-    }
+            const response = await fetch(url, options);
+            
+            // Get content type to determine how to parse response
+            const contentType = response.headers.get('content-type');
+            console.log(`📋 Response status: ${response.status}`);
+            console.log(`📋 Content-Type: ${contentType}`);
 
-    async handleGetAdvice() {
-        const prompt = this.elements.aiPrompt.value.trim();
-        if (!prompt) {
-            this.showNotification('Please enter a question for the AI advisor.', 'error');
-            return;
-        }
-
-        this.setButtonLoading(this.elements.getAdviceButton, true);
-        this.renderAIResponse(null, true); // Show skeleton loader
-
-        try {
-            const payload = { prompt, model_data: this.modelData };
-            const result = await this.apiCall('/get-advice', payload);
-            this.renderAIResponse(result.advice);
-        } catch (error) {
-            this.handleApiError(error);
-            this.renderAIResponse(`**Error:** ${error.message}`);
-        } finally {
-            this.setButtonLoading(this.elements.getAdviceButton, false);
-        }
-    }
-
-    async handleExport() {
-        this.setButtonLoading(this.elements.exportButton, true);
-        try {
-            const canvas = await this.generateCombinedChart();
-            const link = document.createElement('a');
-            link.download = `finpilot-export-${Date.now()}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-        } catch (error) {
-            this.showNotification(`Export failed: ${error.message}`, 'error');
-        } finally {
-            this.setButtonLoading(this.elements.exportButton, false);
-        }
-    }
-
-    async apiCall(endpoint, payload) {
-        if (!this.apiKey) {
-            this.showModal(true);
-            throw new Error('API Key is missing.');
-        }
-
-        let lastError;
-        for (let i = 0; i < this.config.retryAttempts; i++) {
-            try {
-                const response = await fetch(`${this.config.baseURL}${endpoint}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-API-Key': this.apiKey,
-                    },
-                    body: JSON.stringify(payload),
-                    signal: AbortSignal.timeout(15000) // 15-second timeout
-                });
-
-                if (response.ok) {
-                    return await response.json();
-                }
-
-                const errorData = await response.json().catch(() => ({ error: `HTTP Error: ${response.status}` }));
-                lastError = new Error(errorData.error || `HTTP Error: ${response.status}`);
+            // Check if response is OK
+            if (!response.ok) {
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
                 
-                if (response.status === 401) { // Unauthorized
-                    this.apiKey = null;
-                    localStorage.removeItem('finpilot_api_key');
-                    this.showModal(true);
-                    this.elements.modalError.textContent = 'Your API key is invalid. Please enter a new one.';
-                    throw lastError; // Stop retrying on auth error
+                try {
+                    // Try to get error details from response
+                    if (contentType && contentType.includes('application/json')) {
+                        const errorData = await response.json();
+                        errorMessage = errorData.message || errorData.error || errorMessage;
+                        console.error('❌ API Error Details:', errorData);
+                    } else {
+                        const errorText = await response.text();
+                        console.error('❌ Non-JSON Error Response:', errorText.substring(0, 200));
+                        errorMessage = `Server returned HTML instead of JSON. Status: ${response.status}`;
+                    }
+                } catch (parseError) {
+                    console.error('❌ Failed to parse error response:', parseError);
                 }
-
-            } catch (error) {
-                lastError = error;
-                if (i < this.config.retryAttempts - 1) {
-                    await new Promise(res => setTimeout(res, this.config.retryDelay * (i + 1)));
-                } else {
-                    throw lastError;
-                }
+                
+                throw new Error(errorMessage);
             }
-        }
-    }
 
-    handleApiError(error) {
-        console.error('API Error:', error);
-        this.showNotification(error.message || 'An unknown API error occurred.', 'error');
-    }
-
-    updateUI(data) {
-        this.updateMetrics(data.summary_metrics);
-        this.createOrUpdateCharts(data.projections);
-    }
-
-    updateMetrics(metrics) {
-        const formatCurrency = (val) => `$${(val || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-        
-        this.elements.mrrMetric.textContent = formatCurrency(metrics.final_mrr);
-        this.elements.capitalMetric.textContent = formatCurrency(metrics.final_capital_remaining);
-        this.elements.ltvCacMetric.textContent = (metrics.ltv_cac_ratio || 0).toFixed(2);
-        this.elements.burnRateMetric.textContent = formatCurrency(metrics.average_burn_rate);
-
-        this.elements.metricsGrid.classList.add('updated');
-        setTimeout(() => this.elements.metricsGrid.classList.remove('updated'), 700);
-    }
-
-    createOrUpdateCharts(projections) {
-        const labels = projections.month.map(m => `Month ${m}`);
-        const chartConfigs = this.getChartConfigs(labels, projections);
-
-        for (const [id, config] of Object.entries(chartConfigs)) {
-            const chartInstance = this.charts.get(id);
-            if (chartInstance) {
-                chartInstance.data = config.data;
-                chartInstance.update();
+            // Parse successful response
+            if (contentType && contentType.includes('application/json')) {
+                const jsonData = await response.json();
+                console.log('✅ Success Response:', jsonData);
+                return jsonData;
             } else {
-                const ctx = this.elements[id]?.getContext('2d');
-                if (ctx) {
-                    this.charts.set(id, new Chart(ctx, config));
-                }
+                const textData = await response.text();
+                console.warn('⚠️ Expected JSON but got text:', textData.substring(0, 100));
+                throw new Error('Server returned non-JSON response when JSON was expected');
             }
+
+        } catch (error) {
+            console.error('❌ Request Failed:', error.message);
+            
+            // Check for network errors
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                throw new Error('Network error: Unable to connect to server. Make sure the Flask app is running.');
+            }
+            
+            throw error;
         }
     }
 
-    getChartConfigs(labels, projections) {
-        const style = getComputedStyle(document.body);
-        const primaryColor = style.getPropertyValue('--primary').trim();
-        const accentColor = style.getPropertyValue('--accent').trim();
-        const dangerColor = style.getPropertyValue('--danger').trim();
+    /**
+     * Test the server connection
+     */
+    async testConnection() {
+        try {
+            const result = await this.makeRequest('/test');
+            console.log('✅ Server connection test passed');
+            return result;
+        } catch (error) {
+            console.error('❌ Server connection test failed:', error.message);
+            throw error;
+        }
+    }
 
-        const getDataset = (label, data, color) => ({
-            label,
-            data,
-            borderColor: color,
-            backgroundColor: `${color}33`, // Add alpha transparency
-            fill: true,
-            tension: 0.4,
-            pointRadius: 0,
-            pointHoverRadius: 5,
-        });
-
-        return {
-            mrrChart: {
-                type: 'line',
-                data: { labels, datasets: [getDataset('MRR', projections.mrr, primaryColor)] },
-                options: this.getChartOptions('Monthly Recurring Revenue')
-            },
-            capitalChart: {
-                type: 'line',
-                data: { labels, datasets: [getDataset('Capital Remaining', projections.capital_remaining, accentColor)] },
-                options: this.getChartOptions('Capital Runway')
-            },
-            unitEconomicsChart: {
-                type: 'bar',
-                data: {
-                    labels: ['LTV / CAC'],
-                    datasets: [{
-                        label: 'LTV/CAC Ratio',
-                        data: [projections.ltv_cac_ratio.slice(-1)[0]],
-                        backgroundColor: primaryColor,
-                    }]
-                },
-                options: this.getChartOptions('LTV to CAC Ratio (Final Month)')
-            }
+    /**
+     * Test the calculation endpoint with sample data
+     */
+    async testCalculation() {
+        const sampleData = {
+            users: 1000,
+            churn: 0.15,
+            ltv: 1200,
+            monthly_expenses: 50000,
+            initial_capital: 500000,
+            cac: 150,
+            market_segment: 'B2B',
+            industry: 'Technology',
+            prediction_horizon: 12,
+            include_ml_predictions: true
         };
+
+        try {
+            const result = await this.makeRequest('/v2/calculate', sampleData, 'POST');
+            console.log('✅ Calculation test passed');
+            return result;
+        } catch (error) {
+            console.error('❌ Calculation test failed:', error.message);
+            throw error;
+        }
     }
 
-    getChartOptions(titleText) {
-        return {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                title: { display: true, text: titleText, font: { size: 16 }, padding: { bottom: 20 } }
-            },
-            scales: {
-                y: { beginAtZero: true, ticks: { callback: (val) => (val >= 1000 ? `${val / 1000}k` : val) } },
-            },
-            interaction: { intersect: false, mode: 'index' },
+    /**
+     * Get health status
+     */
+    async getHealth() {
+        try {
+            const result = await this.makeRequest('/health');
+            console.log('✅ Health check passed');
+            return result;
+        } catch (error) {
+            console.error('❌ Health check failed:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Calculate financial metrics
+     */
+    async calculateMetrics(data) {
+        return await this.makeRequest('/v2/calculate', data, 'POST');
+    }
+
+    /**
+     * Get AI advice
+     */
+    async getAdvice(prompt, context = {}) {
+        const adviceData = {
+            prompt: prompt,
+            context: context,
+            priority: 'NORMAL',
+            language: 'en',
+            max_response_length: 500
         };
-    }
-
-    renderAIResponse(markdown, isLoading = false) {
-        if (isLoading) {
-            this.elements.aiResponseContent.innerHTML = Array(3).fill('<div class="skeleton-loader"></div>').join('');
-            return;
-        }
-        if (typeof marked !== 'undefined') {
-            this.elements.aiResponseContent.innerHTML = marked.parse(markdown || '');
-        } else {
-            this.elements.aiResponseContent.textContent = markdown || '';
-        }
-    }
-
-    showSections(visible) {
-        const sections = [this.elements.resultsSection, this.elements.visualsSection, this.elements.aiAdvisorSection, this.elements.exportSection];
-        sections.forEach(section => section?.classList.toggle('hidden', !visible));
-    }
-
-    setButtonLoading(button, isLoading) {
-        if (!button) return;
-        button.disabled = isLoading;
-        const span = button.querySelector('span');
-        const existingSpinner = button.querySelector('.loading-spinner');
-
-        if (isLoading) {
-            if (span) span.style.display = 'none';
-            if (!existingSpinner) {
-                const spinner = document.createElement('div');
-                spinner.className = 'loading-spinner';
-                button.prepend(spinner);
-            }
-        } else {
-            if (span) span.style.display = 'inline';
-            if (existingSpinner) existingSpinner.remove();
-        }
-    }
-
-    showNotification(message, type = 'info') {
-        const el = document.createElement('div');
-        el.className = `notification notification-${type}`;
-        el.textContent = message;
-        this.elements.notificationContainer.appendChild(el);
-
-        requestAnimationFrame(() => el.classList.add('show'));
-
-        setTimeout(() => {
-            el.classList.remove('show');
-            el.addEventListener('transitionend', () => el.remove());
-        }, 4000);
-    }
-    
-    async generateCombinedChart() {
-        const canvases = Array.from(this.charts.values()).map(chart => chart.canvas);
-        if (canvases.length === 0) throw new Error('No charts available to export.');
-
-        const padding = 20;
-        const totalWidth = Math.max(...canvases.map(c => c.width));
-        const totalHeight = canvases.reduce((sum, c) => sum + c.height, 0) + (padding * (canvases.length + 1));
-
-        const canvas = document.createElement('canvas');
-        canvas.width = totalWidth;
-        canvas.height = totalHeight;
-        canvas.height = 800;
-        const ctx = canvas.getContext('2d');
         
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        return canvas;
-    }
-
-    cleanup() {
-        this.destroyCharts();
-        this.cache.clear();
-        if (this.worker) {
-            this.worker.terminate();
-        }
-        clearTimeout(this.debounceTimer);
+        return await this.makeRequest('/v2/get-advice', adviceData, 'POST');
     }
 }
 
-// Use the correct class name that was defined above
-document.addEventListener('DOMContentLoaded', () => new FinPilot());
+// 🔥 USAGE EXAMPLES AND TESTING FUNCTIONS
+
+// Initialize API client
+const api = new FundPilotAPI('http://127.0.0.1:5000');
+
+/**
+ * Run comprehensive tests
+ */
+async function runAllTests() {
+    console.log('🚀 Starting FundPilot API Tests');
+    console.log('=' * 50);
+
+    const tests = [
+        { name: 'Server Connection', fn: () => api.testConnection() },
+        { name: 'Health Check', fn: () => api.getHealth() },
+        { name: 'Calculation Test', fn: () => api.testCalculation() }
+    ];
+
+    const results = [];
+
+    for (const test of tests) {
+        console.log(`\n🧪 Running test: ${test.name}`);
+        try {
+            const result = await test.fn();
+            console.log(`✅ ${test.name}: PASSED`);
+            results.push({ name: test.name, status: 'PASSED', result });
+        } catch (error) {
+            console.error(`❌ ${test.name}: FAILED - ${error.message}`);
+            results.push({ name: test.name, status: 'FAILED', error: error.message });
+        }
+    }
+
+    console.log('\n📊 Test Results Summary:');
+    console.log('=' * 50);
+    results.forEach(result => {
+        const icon = result.status === 'PASSED' ? '✅' : '❌';
+        console.log(`${icon} ${result.name}: ${result.status}`);
+        if (result.error) {
+            console.log(`   Error: ${result.error}`);
+        }
+    });
+
+    return results;
+}
+
+/**
+ * Simple calculation example
+ */
+async function calculateExample() {
+    const data = {
+        users: 500,
+        churn: 0.1,
+        ltv: 2000,
+        monthly_expenses: 25000,
+        initial_capital: 300000,
+        cac: 200
+    };
+
+    try {
+        console.log('🧮 Running calculation example...');
+        const result = await api.calculateMetrics(data);
+        console.log('✅ Calculation result:', result);
+        return result;
+    } catch (error) {
+        console.error('❌ Calculation failed:', error.message);
+        throw error;
+    }
+}
+
+/**
+ * Form handling example for HTML forms
+ */
+function setupFormHandler() {
+    // Example form handler
+    const form = document.getElementById('calculationForm');
+    if (!form) {
+        console.log('ℹ️ No form with ID "calculationForm" found');
+        return;
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(form);
+        const data = {
+            users: parseInt(formData.get('users')) || 0,
+            churn: parseFloat(formData.get('churn')) || 0.1,
+            ltv: parseFloat(formData.get('ltv')) || 0,
+            monthly_expenses: parseFloat(formData.get('monthly_expenses')) || 0,
+            initial_capital: parseFloat(formData.get('initial_capital')) || 0,
+            cac: parseFloat(formData.get('cac')) || 0
+        };
+
+        console.log('📝 Form submitted with data:', data);
+
+        try {
+            // Show loading state
+            const submitButton = form.querySelector('button[type="submit"]');
+            const originalText = submitButton.textContent;
+            submitButton.textContent = 'Calculating...';
+            submitButton.disabled = true;
+
+            const result = await api.calculateMetrics(data);
+            
+            // Display results
+            displayResults(result);
+            
+        } catch (error) {
+            displayError(error.message);
+        } finally {
+            // Reset button
+            const submitButton = form.querySelector('button[type="submit"]');
+            submitButton.textContent = originalText;
+            submitButton.disabled = false;
+        }
+    });
+}
+
+/**
+ * Display results in the UI
+ */
+function displayResults(result) {
+    const resultsDiv = document.getElementById('results');
+    if (!resultsDiv) {
+        console.log('ℹ️ No results div found, logging to console instead');
+        console.log('📊 Results:', result);
+        return;
+    }
+
+    if (result.success && result.data && result.data.summary_metrics) {
+        const metrics = result.data.summary_metrics;
+        resultsDiv.innerHTML = `
+            <div class="results-success">
+                <h3>✅ Calculation Results</h3>
+                <div class="metrics-grid">
+                    ${Object.entries(metrics).map(([key, value]) => `
+                        <div class="metric-item">
+                            <label>${key.replace(/_/g, ' ').toUpperCase()}</label>
+                            <span>${typeof value === 'number' ? value.toLocaleString() : value}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <small>Request ID: ${result.request_id}</small>
+            </div>
+        `;
+    } else {
+        resultsDiv.innerHTML = `
+            <div class="results-error">
+                <h3>❌ Calculation Failed</h3>
+                <p>Unexpected response format</p>
+                <pre>${JSON.stringify(result, null, 2)}</pre>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Display error in the UI
+ */
+function displayError(message) {
+    const resultsDiv = document.getElementById('results');
+    if (!resultsDiv) {
+        console.error('❌ Error:', message);
+        return;
+    }
+
+    resultsDiv.innerHTML = `
+        <div class="results-error">
+            <h3>❌ Error</h3>
+            <p>${message}</p>
+        </div>
+    `;
+}
+
+// 🔥 AUTO-INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🔄 FundPilot API Client initialized');
+    
+    // Setup form handler if form exists
+    setupFormHandler();
+    
+    // Add global functions for easy testing in console
+    window.fundpilot = {
+        api,
+        runTests: runAllTests,
+        calculate: calculateExample,
+        testConnection: () => api.testConnection(),
+        getHealth: () => api.getHealth()
+    };
+    
+    console.log('🛠️ Available functions in window.fundpilot:');
+    console.log('- runTests(): Run all API tests');
+    console.log('- calculate(): Run sample calculation');
+    console.log('- testConnection(): Test server connection');
+    console.log('- getHealth(): Get server health status');
+    console.log('- api: Direct API client access');
+});
+
+// Export for module systems
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { FundPilotAPI, runAllTests, calculateExample };
+}

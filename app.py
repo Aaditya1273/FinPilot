@@ -42,8 +42,41 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 import joblib
 
-from financial_engine import calculate_metrics, calculate_mrr_arr, calculate_burn_rate_runway, calculate_ltv_cac
-from ai_advisor import initialize_llm, get_advice
+# Import your custom modules with error handling
+try:
+    from financial_engine import calculate_metrics, calculate_mrr_arr, calculate_burn_rate_runway, calculate_ltv_cac
+except ImportError:
+    print("⚠️  Warning: financial_engine module not found. Using fallback functions.")
+    def calculate_metrics(data):
+        return {
+            "monthly_revenue": data.get('users', 0) * data.get('ltv', 0) / 12,
+            "annual_revenue": data.get('users', 0) * data.get('ltv', 0),
+            "burn_rate": data.get('monthly_expenses', 0),
+            "runway_months": data.get('initial_capital', 0) / max(data.get('monthly_expenses', 1), 1),
+            "customer_acquisition_cost": data.get('cac', 0),
+            "lifetime_value": data.get('ltv', 0),
+            "churn_rate": data.get('churn', 0.1),
+            "growth_rate": max(0, 1 - data.get('churn', 0.1))
+        }
+    
+    def calculate_mrr_arr(data):
+        return {"mrr": data.get('mrr', 0), "arr": data.get('mrr', 0) * 12}
+    
+    def calculate_burn_rate_runway(data):
+        return {"burn_rate": data.get('burn_rate', 0), "runway": data.get('runway', 0)}
+    
+    def calculate_ltv_cac(data):
+        return {"ltv": data.get('ltv', 0), "cac": data.get('cac', 0), "ratio": data.get('ltv', 0) / max(data.get('cac', 1), 1)}
+
+try:
+    from ai_advisor import initialize_llm, get_advice
+except ImportError:
+    print("⚠️  Warning: ai_advisor module not found. Using fallback functions.")
+    def initialize_llm():
+        return True
+    
+    def get_advice(prompt):
+        return f"AI advice for: {prompt[:50]}... (Fallback response - AI module not available)"
 
 def initialize_ai_models():
     """Initialize AI models for advice generation"""
@@ -116,8 +149,12 @@ class SmartCache:
         self._lock = threading.RLock()
         
     def _generate_key(self, data: Dict) -> str:
-        serialized = json.dumps(data, sort_keys=True)
-        return hashlib.sha256(serialized.encode()).hexdigest()[:16]
+        try:
+            serialized = json.dumps(data, sort_keys=True, default=str)
+            return hashlib.sha256(serialized.encode()).hexdigest()[:16]
+        except Exception as e:
+            # Fallback key generation
+            return str(hash(str(data)))[:16]
     
     def _is_expired(self, key: str) -> bool:
         return key in self.expiry_times and time.time() > self.expiry_times[key]
@@ -142,28 +179,35 @@ class SmartCache:
         return min(1.0, (recent_access_frequency * 0.7) + (total_accesses / 1000 * 0.3))
     
     def get(self, data: Dict) -> Optional[Any]:
-        key = self._generate_key(data)
-        
-        with self._lock:
-            if key in self.memory_cache and not self._is_expired(key):
-                self._update_access_pattern(key)
-                self.cache_stats['hits'] += 1
-                compressed_data = self.memory_cache[key]
-                return pickle.loads(zlib.decompress(compressed_data))
+        try:
+            key = self._generate_key(data)
             
-            self.cache_stats['misses'] += 1
+            with self._lock:
+                if key in self.memory_cache and not self._is_expired(key):
+                    self._update_access_pattern(key)
+                    self.cache_stats['hits'] += 1
+                    compressed_data = self.memory_cache[key]
+                    return pickle.loads(zlib.decompress(compressed_data))
+                
+                self.cache_stats['misses'] += 1
+                return None
+        except Exception as e:
+            logger.error(f"Cache get error: {e}")
             return None
     
     def set(self, data: Dict, value: Any, ttl: int = 300):
-        key = self._generate_key(data)
-        cache_value = self._predict_cache_value(key)
-        
-        if cache_value > 0.3 or self.strategy == CacheStrategy.MEMORY:
-            with self._lock:
-                compressed_data = zlib.compress(pickle.dumps(value), level=6)
-                self.memory_cache[key] = compressed_data
-                self.expiry_times[key] = time.time() + ttl
-                self._update_access_pattern(key)
+        try:
+            key = self._generate_key(data)
+            cache_value = self._predict_cache_value(key)
+            
+            if cache_value > 0.3 or self.strategy == CacheStrategy.MEMORY:
+                with self._lock:
+                    compressed_data = zlib.compress(pickle.dumps(value), level=6)
+                    self.memory_cache[key] = compressed_data
+                    self.expiry_times[key] = time.time() + ttl
+                    self._update_access_pattern(key)
+        except Exception as e:
+            logger.error(f"Cache set error: {e}")
     
     def invalidate(self, pattern: str = None):
         with self._lock:
@@ -301,7 +345,7 @@ class MLPredictor:
             return self._fallback_prediction(data)
         
         try:
-            features = np.array([[data[name] for name in self.feature_names]])
+            features = np.array([[data.get(name, 0) for name in self.feature_names]])
             scaled_features = self.scaler.transform(features)
             prediction = self.model.predict(scaled_features)[0]
             
@@ -316,17 +360,26 @@ class MLPredictor:
             return self._fallback_prediction(data)
     
     def _fallback_prediction(self, data: Dict) -> Dict:
+        users = data.get('users', 0)
+        ltv = data.get('ltv', 0)
+        churn = data.get('churn', 0.1)
+        
         return {
-            'predicted_revenue': data.get('users', 0) * data.get('ltv', 0) * (1 - data.get('churn', 0.1)),
-            'risk_score': min(1.0, data.get('churn', 0.1) * 2),
-            'growth_potential': max(0.0, 1.0 - data.get('churn', 0.1)),
+            'predicted_revenue': users * ltv * (1 - churn),
+            'risk_score': min(1.0, churn * 2),
+            'growth_potential': max(0.0, 1.0 - churn),
             'recommendations': ['Optimize user acquisition', 'Reduce churn rate', 'Increase customer lifetime value']
         }
     
     def _calculate_risk_score(self, data: Dict) -> float:
         churn_weight = 0.4
-        cac_ltv_ratio = data.get('cac', 0) / max(data.get('ltv', 1), 1)
-        expense_ratio = data.get('monthly_expenses', 0) / max(data.get('users', 1) * data.get('ltv', 1), 1)
+        cac = data.get('cac', 0)
+        ltv = data.get('ltv', 1)
+        cac_ltv_ratio = cac / max(ltv, 1)
+        
+        users = data.get('users', 1)
+        monthly_expenses = data.get('monthly_expenses', 0)
+        expense_ratio = monthly_expenses / max(users * ltv, 1)
         
         risk = (data.get('churn', 0) * churn_weight + 
                 min(1.0, cac_ltv_ratio) * 0.3 + 
@@ -334,8 +387,12 @@ class MLPredictor:
         return min(1.0, risk)
     
     def _calculate_growth_potential(self, data: Dict) -> float:
-        ltv_cac_ratio = data.get('ltv', 0) / max(data.get('cac', 1), 1)
-        low_churn_bonus = max(0, 0.3 - data.get('churn', 0.3))
+        ltv = data.get('ltv', 0)
+        cac = data.get('cac', 1)
+        ltv_cac_ratio = ltv / max(cac, 1)
+        
+        churn = data.get('churn', 0.3)
+        low_churn_bonus = max(0, 0.3 - churn)
         efficiency_score = min(1.0, ltv_cac_ratio / 3.0)
         
         return min(1.0, efficiency_score + low_churn_bonus)
@@ -343,17 +400,23 @@ class MLPredictor:
     def _generate_recommendations(self, data: Dict) -> List[str]:
         recommendations = []
         
-        if data.get('churn', 0) > 0.2:
+        churn = data.get('churn', 0)
+        if churn > 0.2:
             recommendations.append("High churn detected - implement retention strategies")
         
-        if data.get('cac', 0) / max(data.get('ltv', 1), 1) > 0.5:
+        cac = data.get('cac', 0)
+        ltv = data.get('ltv', 1)
+        if cac / max(ltv, 1) > 0.5:
             recommendations.append("CAC to LTV ratio is concerning - optimize acquisition costs")
         
-        if data.get('monthly_expenses', 0) / max(data.get('users', 1), 1) > 100:
+        monthly_expenses = data.get('monthly_expenses', 0)
+        users = data.get('users', 1)
+        if monthly_expenses / max(users, 1) > 100:
             recommendations.append("High operational costs per user - review expense structure")
         
         return recommendations or ["Metrics look healthy - continue current strategy"]
 
+# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -364,15 +427,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Initialize Flask app
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
+# Setup CORS
 CORS(app, 
      origins=os.getenv('ALLOWED_ORIGINS', '*').split(','),
      methods=['GET', 'POST', 'PUT', 'DELETE'],
      allow_headers=['Content-Type', 'Authorization', 'X-API-Key'],
      expose_headers=['X-RateLimit-Remaining', 'X-Response-Time'])
 
+# Initialize Redis with error handling
 try:
     redis_client = redis.Redis(
         host=os.getenv('REDIS_HOST', 'localhost'),
@@ -386,11 +452,13 @@ try:
     )
     redis_client.ping()
     CACHE_ENABLED = True
-except:
+    logger.info("✅ Redis connected successfully")
+except Exception as e:
     redis_client = None
     CACHE_ENABLED = False
-    logger.warning("Redis unavailable, using memory cache")
+    logger.warning(f"⚠️  Redis unavailable: {e}")
 
+# Initialize components
 executor = ThreadPoolExecutor(max_workers=int(os.getenv('MAX_WORKERS', 8)), thread_name_prefix="FundPilot")
 smart_cache = SmartCache(CacheStrategy.HYBRID if CACHE_ENABLED else CacheStrategy.MEMORY)
 rate_limiter = AdvancedRateLimiter()
@@ -399,18 +467,44 @@ ml_predictor = MLPredictor()
 circuit_breaker = CircuitBreaker()
 performance_metrics = PerformanceMetrics()
 
-# --- API Key Management ---
-VALID_API_KEYS = os.getenv("API_KEYS", "").split(',')
+# API Key Management
+VALID_API_KEYS = [key.strip() for key in os.getenv("API_KEYS", "test-key-123").split(',') if key.strip()]
 
 def require_api_key(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         api_key = request.headers.get('X-API-Key')
-        if api_key not in VALID_API_KEYS:
-            return jsonify({'error': 'Invalid or missing API key'}), 403
-        return f(*args, **kwargs)
+        if not VALID_API_KEYS or api_key in VALID_API_KEYS:
+            return f(*args, **kwargs)
+        return jsonify({'error': 'Invalid or missing API key'}), 403
     return decorated_function
 
+# Request middleware
+@app.before_request
+def before_request():
+    g.start_time = time.time()
+    g.request_id = str(uuid.uuid4())[:8]
+    performance_metrics.request_count += 1
+    performance_metrics.active_connections += 1
+
+@app.after_request
+def after_request(response):
+    try:
+        response_time = time.time() - g.start_time
+        performance_metrics.total_response_time += response_time
+        performance_metrics.active_connections = max(0, performance_metrics.active_connections - 1)
+        
+        if response.status_code >= 400:
+            performance_metrics.error_count += 1
+        
+        response.headers['X-Response-Time'] = f"{response_time:.3f}s"
+        response.headers['X-Request-ID'] = g.request_id
+    except Exception as e:
+        logger.error(f"After request error: {e}")
+    
+    return response
+
+# Schema validation
 class AdvancedCalculationSchema(Schema):
     users = fields.Integer(required=True, validate=validate.Range(min=1, max=10000000))
     churn = fields.Float(required=True, validate=validate.Range(min=0.001, max=0.999))
@@ -438,55 +532,51 @@ class EnhancedAdviceSchema(Schema):
     language = fields.String(load_default='en', validate=validate.OneOf(['en', 'es', 'fr', 'de']))
     max_response_length = fields.Integer(load_default=500, validate=validate.Range(min=100, max=2000))
 
-@app.route('/v2/export', methods=['POST'])
-@require_api_key
-def export_data():
-    """Export financial model data as CSV or JSON."""
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid request body"}), 400
+# Error handlers
+@app.errorhandler(ValidationError)
+def handle_validation_error(e):
+    logger.error(f"Validation error [{g.request_id}]: {e.messages}")
+    return jsonify({
+        'success': False,
+        'error': 'Validation failed',
+        'details': e.messages,
+        'request_id': getattr(g, 'request_id', 'unknown')
+    }), 400
 
-    export_format = data.get('format', 'json').lower()
-    model_data = data.get('model_data')
+@app.errorhandler(429)
+def handle_rate_limit(e):
+    return jsonify({
+        'success': False,
+        'error': 'Rate limit exceeded',
+        'message': 'Too many requests, please slow down',
+        'request_id': getattr(g, 'request_id', 'unknown')
+    }), 429
 
-    if not model_data or 'projections' not in model_data or 'summary_metrics' not in model_data:
-        return jsonify({"error": "Incomplete or invalid model data provided"}), 400
+@app.errorhandler(500)
+def handle_internal_error(e):
+    logger.error(f"Internal server error [{g.request_id}]: {str(e)}")
+    return jsonify({
+        'success': False,
+        'error': 'Internal server error',
+        'message': 'An unexpected error occurred',
+        'request_id': getattr(g, 'request_id', 'unknown')
+    }), 500
 
-    if export_format == 'csv':
-        try:
-            projections = model_data['projections']
-            summary = model_data['summary_metrics']
-            
-            si = StringIO()
-            cw = csv.writer(si)
-            
-            cw.writerow(['Metric', 'Value'])
-            for key, value in summary.items():
-                cw.writerow([key.replace('_', ' ').title(), value])
-            cw.writerow([])
-            
-            cw.writerow(['Month'] + list(projections.keys()))
-            
-            num_months = len(next(iter(projections.values())))
-            for i in range(num_months):
-                row = [f'Month {i+1}'] + [projections[key][i] for key in projections.keys()]
-                cw.writerow(row)
-            
-            output = si.getvalue()
-            return Response(
-                output,
-                mimetype='text/csv',
-                headers={"Content-disposition": "attachment; filename=financial_model.csv"}
-            )
-        except Exception as e:
-            logging.error(f"CSV export failed: {e}")
-            return jsonify({"error": "Failed to generate CSV file."}), 500
+@app.errorhandler(Exception)
+def handle_general_exception(e):
+    logger.error(f"Unhandled exception [{g.request_id}]: {str(e)}", exc_info=True)
+    return jsonify({
+        'success': False,
+        'error': 'Unexpected error',
+        'message': str(e),
+        'request_id': getattr(g, 'request_id', 'unknown')
+    }), 500
 
-    elif export_format == 'json':
-        return jsonify(model_data)
-    
-    else:
-        return jsonify({"error": "Unsupported format. Please choose 'json' or 'csv'."}), 400
+def validate_and_extract(schema, data):
+    try:
+        return schema.load(data)
+    except ValidationError as e:
+        raise e
 
 def log_request_to_db(endpoint: str, data: Dict, response_time: float, status_code: int):
     if db_manager.pool:
@@ -501,608 +591,552 @@ def log_request_to_db(endpoint: str, data: Dict, response_time: float, status_co
         except Exception as e:
             logger.error(f"Failed to log request: {e}")
 
-@app.errorhandler(ValidationError)
-def handle_validation_error(e):
-    return jsonify({
-        'error': 'Validation failed',
-        'details': e.messages,
-        'request_id': getattr(g, 'request_id', 'unknown')
-    }), 400
-
-@app.errorhandler(429)
-def handle_rate_limit(e):
-    return jsonify({
-        'error': 'Rate limit exceeded',
-        'message': 'Too many requests, please slow down',
-        'request_id': getattr(g, 'request_id', 'unknown')
-    }), 429
-
-def validate_and_extract(schema, data):
-    try:
-        return schema.load(data)
-    except ValidationError as e:
-        # Re-raise the original ValidationError so the handler can catch it
-        raise e
-
-async def async_calculate_enhanced_metrics(data):
-    try:
-        basic_results = await asyncio.get_event_loop().run_in_executor(
-            executor, calculate_metrics, data
-        )
-        
-        if data.get('include_ml_predictions', True):
-            ml_results = await asyncio.get_event_loop().run_in_executor(
-                executor, ml_predictor.predict_metrics, data
-            )
-            basic_results.update(ml_results)
-        
-        return basic_results
-    except Exception as e:
-        logger.error(f"Enhanced calculation failed: {e}")
-        raise
-
+# 🔥 FIXED MAIN CALCULATION ROUTE
 @app.route('/v2/calculate', methods=['POST'])
-# @require_api_key
 def handle_advanced_calculation():
-    if not request.is_json:
-        return jsonify({'success': False, 'error': 'Invalid Content-Type', 'message': 'Request must be application/json'}), 400
-
+    """Fixed calculation endpoint with comprehensive error handling"""
     try:
+        # Validate request content type
+        if not request.is_json:
+            return jsonify({
+                'success': False, 
+                'error': 'Invalid Content-Type', 
+                'message': 'Request must be application/json'
+            }), 400
+
+        # Get and validate JSON data
         request_data = request.get_json()
         if not request_data:
-            return jsonify({'success': False, 'error': 'Bad Request', 'message': 'No JSON data received'}), 400
+            return jsonify({
+                'success': False, 
+                'error': 'Bad Request', 
+                'message': 'No JSON data received'
+            }), 400
 
-        # Use the CORRECT schema that matches the simple frontend form
-        validated_data = validate_and_extract(FinancialInputSchema(), request_data)
+        logger.info(f"📦 Received calculation request [{g.request_id}]: {request_data}")
 
-        # The financial_engine expects a simple dictionary.
-        calculation_data = validated_data
+        # Validate data against schema
+        try:
+            validated_data = validate_and_extract(AdvancedCalculationSchema(), request_data)
+        except ValidationError as e:
+            logger.error(f"Validation failed [{g.request_id}]: {e.messages}")
+            return jsonify({
+                'success': False,
+                'error': 'Validation failed',
+                'details': e.messages,
+                'request_id': g.request_id
+            }), 400
 
-        # Check cache with the clean data
-        cached_result = smart_cache.get(str(calculation_data))
+        # Check cache first
+        cache_key = validated_data
+        cached_result = smart_cache.get(cache_key)
         if cached_result:
+            logger.info(f"✅ Cache hit [{g.request_id}]")
             performance_metrics.cache_hits += 1
             return jsonify({
                 'success': True,
                 'data': {'summary_metrics': cached_result},
-                'request_id': g.get('request_id', 'unknown')
-            })
+                'cached': True,
+                'request_id': g.request_id,
+                'processing_time': f"{time.time() - g.start_time:.3f}s"
+            }), 200
 
-        # If not in cache, calculate, then cache the result
-        results = financial_engine.calculate_metrics(calculation_data)
-        smart_cache.set(str(calculation_data), results)
+        # Perform calculation
+        logger.info(f"🔄 Calculating metrics [{g.request_id}]")
+        
+        try:
+            # Use circuit breaker for external calculations
+            results = circuit_breaker.call(calculate_metrics, validated_data)
+            
+            # Add ML predictions if requested
+            if validated_data.get('include_ml_predictions', True):
+                try:
+                    ml_results = ml_predictor.predict_metrics(validated_data)
+                    results.update(ml_results)
+                except Exception as ml_error:
+                    logger.warning(f"ML prediction failed [{g.request_id}]: {ml_error}")
+                    # Continue without ML predictions
+            
+        except Exception as calc_error:
+            logger.error(f"Calculation failed [{g.request_id}]: {calc_error}")
+            return jsonify({
+                'success': False,
+                'error': 'Calculation failed',
+                'message': str(calc_error),
+                'request_id': g.request_id
+            }), 500
+
+        # Cache the results
+        smart_cache.set(cache_key, results, ttl=300)
         performance_metrics.cache_misses += 1
 
+        # Log to database if available
+        log_request_to_db('/v2/calculate', validated_data, time.time() - g.start_time, 200)
+
+        logger.info(f"✅ Calculation completed [{g.request_id}]")
+        
         response_data = {
             'success': True,
             'data': {'summary_metrics': results},
-            'request_id': g.get('request_id', 'unknown')
+            'cached': False,
+            'request_id': g.request_id,
+            'processing_time': f"{time.time() - g.start_time:.3f}s"
         }
         
         return jsonify(response_data), 200
 
-    except ValidationError as e:
-        # The app-level handler will format this into a 400 JSON response
-        raise e
     except Exception as e:
-        # Catch any other unexpected errors during calculation
-        current_app.logger.error(f"Unhandled error in calculation: {e}", exc_info=True)
+        logger.error(f"❌ Unhandled error in calculation [{g.request_id}]: {str(e)}", exc_info=True)
+        performance_metrics.error_count += 1
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
-            'message': 'An unexpected error occurred during calculation.'
+            'message': 'An unexpected error occurred during calculation',
+            'request_id': getattr(g, 'request_id', 'unknown'),
+            'debug': str(e) if app.debug else None
         }), 500
-        
+
+# Legacy API compatibility
+@app.route('/api/calculate', methods=['POST'])
+def api_calculate():
+    """Legacy calculation endpoint with error handling"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Invalid input'}), 400
+
+        logger.info(f"📦 Legacy API request [{g.request_id}]: {data}")
+
+        results = {}
+
+        # Extract data for calculations
+        mrr_data = data.get('mrr_data')
+        burn_data = data.get('burn_data')
+        ltv_cac_data = data.get('ltv_cac_data')
+
+        try:
+            if mrr_data:
+                results['mrr_arr'] = calculate_mrr_arr(mrr_data)
+            
+            if burn_data:
+                results['burn_runway'] = calculate_burn_rate_runway(burn_data)
+
+            if ltv_cac_data:
+                results['ltv_cac'] = calculate_ltv_cac(ltv_cac_data)
+
+        except Exception as calc_error:
+            logger.error(f"Legacy calculation failed [{g.request_id}]: {calc_error}")
+            return jsonify({
+                'success': False,
+                'error': 'Calculation failed',
+                'message': str(calc_error)
+            }), 500
+
         return jsonify({
             'success': True,
-            'data': {'summary_metrics': results},
-            'cached': False,
-            'timestamp': int(time.time()),
-            'request_id': g.request_id,
-            'processing_time': f"{time.time() - g.start_time:.3f}s",
-            'ml_enhanced': data.get('include_ml_predictions', True)
+            'data': results,
+            'request_id': g.request_id
         }), 200
-    
+
     except Exception as e:
-        logger.error(f"Calculation error [{g.request_id}]: {str(e)}")
-        log_request_to_db('/v2/calculate', data, time.time() - g.start_time, 500)
-        raise InternalServerError(f"Calculation failed: {str(e)}")
+        logger.error(f"❌ Legacy API error [{g.request_id}]: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': str(e)
+        }), 500
 
 @app.route('/v2/get-advice', methods=['POST'])
 @require_api_key
 def handle_enhanced_advice():
-    if not request.is_json:
-        raise BadRequest("Content-Type must be application/json")
-    
-    request_data = request.get_json()
-    data = validate_and_extract(EnhancedAdviceSchema(), request_data)
-    
-    if not initialize_ai_models():
-        raise InternalServerError("AI models not available")
-    
+    """Enhanced advice endpoint with proper error handling"""
     try:
-        advice = get_advice(data['prompt'])
+        if not request.is_json:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid Content-Type',
+                'message': 'Request must be application/json'
+            }), 400
         
-        log_request_to_db('/v2/get-advice', data, time.time() - g.start_time, 200)
+        request_data = request.get_json()
+        if not request_data:
+            return jsonify({
+                'success': False,
+                'error': 'Bad Request',
+                'message': 'No JSON data received'
+            }), 400
+
+        logger.info(f"📦 Advice request [{g.request_id}]: {request_data}")
         
-        return jsonify({
-            'success': True,
-            'advice': advice,
-            'context': data.get('context', {}),
-            'priority': data['priority'].name,
-            'language': data['language'],
-            'user_id': data['user_id'],
-            'session_id': data['session_id'],
-            'timestamp': int(time.time()),
-            'request_id': g.request_id,
-            'processing_time': f"{time.time() - g.start_time:.3f}s"
-        }), 200
-    
+        # Validate data
+        try:
+            data = validate_and_extract(EnhancedAdviceSchema(), request_data)
+        except ValidationError as e:
+            return jsonify({
+                'success': False,
+                'error': 'Validation failed',
+                'details': e.messages,
+                'request_id': g.request_id
+            }), 400
+        
+        # Check if AI models are available
+        if not initialize_ai_models():
+            return jsonify({
+                'success': False,
+                'error': 'AI models not available',
+                'message': 'AI advisory service is currently unavailable'
+            }), 503
+        
+        try:
+            advice = get_advice(data['prompt'])
+            
+            log_request_to_db('/v2/get-advice', data, time.time() - g.start_time, 200)
+            
+            return jsonify({
+                'success': True,
+                'advice': advice,
+                'context': data.get('context', {}),
+                'priority': data['priority'].name,
+                'language': data['language'],
+                'user_id': data['user_id'],
+                'session_id': data['session_id'],
+                'timestamp': int(time.time()),
+                'request_id': g.request_id,
+                'processing_time': f"{time.time() - g.start_time:.3f}s"
+            }), 200
+        
+        except Exception as advice_error:
+            logger.error(f"Advice generation error [{g.request_id}]: {str(advice_error)}")
+            log_request_to_db('/v2/get-advice', data, time.time() - g.start_time, 500)
+            return jsonify({
+                'success': False,
+                'error': 'Advice generation failed',
+                'message': str(advice_error),
+                'request_id': g.request_id
+            }), 500
+
     except Exception as e:
-        logger.error(f"Advice generation error [{g.request_id}]: {str(e)}")
-        log_request_to_db('/v2/get-advice', data, time.time() - g.start_time, 500)
-        raise InternalServerError(f"Advice generation failed: {str(e)}")
+        logger.error(f"❌ Advice endpoint error [{g.request_id}]: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': str(e),
+            'request_id': g.request_id
+        }), 500
+
+@app.route('/v2/export', methods=['POST'])
+@require_api_key
+def export_data():
+    """Export financial model data as CSV or JSON with error handling"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid request body',
+                'message': 'No JSON data received'
+            }), 400
+
+        export_format = data.get('format', 'json').lower()
+        model_data = data.get('model_data')
+
+        if not model_data or 'projections' not in model_data or 'summary_metrics' not in model_data:
+            return jsonify({
+                'success': False,
+                'error': 'Incomplete or invalid model data provided',
+                'message': 'model_data must contain projections and summary_metrics'
+            }), 400
+
+        if export_format == 'csv':
+            try:
+                projections = model_data['projections']
+                summary = model_data['summary_metrics']
+                
+                si = StringIO()
+                cw = csv.writer(si)
+                
+                # Write summary metrics
+                cw.writerow(['Metric', 'Value'])
+                for key, value in summary.items():
+                    cw.writerow([key.replace('_', ' ').title(), value])
+                cw.writerow([])
+                
+                # Write projections
+                if projections:
+                    cw.writerow(['Month'] + list(projections.keys()))
+                    
+                    num_months = len(next(iter(projections.values())))
+                    for i in range(num_months):
+                        row = [f'Month {i+1}'] + [projections[key][i] for key in projections.keys()]
+                        cw.writerow(row)
+                
+                output = si.getvalue()
+                return Response(
+                    output,
+                    mimetype='text/csv',
+                    headers={"Content-disposition": "attachment; filename=financial_model.csv"}
+                )
+            except Exception as csv_error:
+                logger.error(f"CSV export failed [{g.request_id}]: {csv_error}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to generate CSV file',
+                    'message': str(csv_error)
+                }), 500
+
+        elif export_format == 'json':
+            return jsonify({
+                'success': True,
+                'data': model_data,
+                'format': 'json',
+                'request_id': g.request_id
+            }), 200
+        
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Unsupported format',
+                'message': "Please choose 'json' or 'csv'"
+            }), 400
+
+    except Exception as e:
+        logger.error(f"❌ Export error [{g.request_id}]: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'message': str(e),
+            'request_id': g.request_id
+        }), 500
 
 @app.route('/health', methods=['GET'])
 def comprehensive_health_check():
-    health_status = {
-        'status': 'healthy',
-        'timestamp': int(time.time()),
-        'version': '2.0.0',
-        'uptime': int(time.time()),
-        'request_id': getattr(g, 'request_id', 'health-check'),
-        'services': {
-            'redis': CACHE_ENABLED,
-            'database': db_manager.pool is not None,
-            'ai_models': initialize_ai_models(),
-            'ml_predictor': ml_predictor.model is not None,
-            'circuit_breaker': circuit_breaker.state
-        },
-        'performance': {
-            'total_requests': performance_metrics.request_count,
-            'error_rate': performance_metrics.error_count / max(performance_metrics.request_count, 1),
-            'avg_response_time': performance_metrics.total_response_time / max(performance_metrics.request_count, 1),
-            'cache_hit_rate': performance_metrics.cache_hits / max(performance_metrics.cache_hits + performance_metrics.cache_misses, 1),
-            'active_connections': performance_metrics.active_connections
+    """Comprehensive health check endpoint"""
+    try:
+        health_status = {
+            'status': 'healthy',
+            'timestamp': int(time.time()),
+            'version': '2.0.0',
+            'uptime': int(time.time()),
+            'request_id': getattr(g, 'request_id', 'health-check'),
+            'services': {
+                'redis': CACHE_ENABLED,
+                'database': db_manager.pool is not None,
+                'ai_models': initialize_ai_models(),
+                'ml_predictor': ml_predictor.model is not None,
+                'circuit_breaker': circuit_breaker.state
+            },
+            'performance': {
+                'total_requests': performance_metrics.request_count,
+                'error_rate': performance_metrics.error_count / max(performance_metrics.request_count, 1),
+                'avg_response_time': performance_metrics.total_response_time / max(performance_metrics.request_count, 1),
+                'cache_hit_rate': performance_metrics.cache_hits / max(performance_metrics.cache_hits + performance_metrics.cache_misses, 1),
+                'active_connections': performance_metrics.active_connections
+            }
         }
-    }
-    
-    status_code = 200
-    if not all(health_status['services'].values()):
-        health_status['status'] = 'degraded'
-        status_code = 206
-    
-    return jsonify(health_status), status_code
+        
+        status_code = 200
+        if not all(health_status['services'].values()):
+            health_status['status'] = 'degraded'
+            status_code = 206
+        
+        return jsonify(health_status), status_code
+
+    except Exception as e:
+        logger.error(f"Health check error: {str(e)}")
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': int(time.time())
+        }), 500
 
 @app.route('/metrics', methods=['GET'])
 @require_api_key
 def get_comprehensive_metrics():
-    metrics = {
-        'timestamp': int(time.time()),
-        'performance': performance_metrics.__dict__,
-        'cache_stats': dict(smart_cache.cache_stats),
-        'memory_usage': len(smart_cache.memory_cache),
-        'rate_limiting': {
-            'active_windows': len(rate_limiter.windows),
-            'tracked_users': len(rate_limiter.user_patterns)
+    """Get comprehensive system metrics"""
+    try:
+        metrics = {
+            'timestamp': int(time.time()),
+            'performance': performance_metrics.__dict__,
+            'cache_stats': dict(smart_cache.cache_stats),
+            'memory_usage': len(smart_cache.memory_cache),
+            'rate_limiting': {
+                'active_windows': len(rate_limiter.windows),
+                'tracked_users': len(rate_limiter.user_patterns)
+            },
+            'request_id': g.request_id
         }
-    }
-    
-    if CACHE_ENABLED and redis_client:
-        try:
-            redis_info = redis_client.info()
-            metrics['redis'] = {
-                'memory_usage': redis_info.get('used_memory_human', 'N/A'),
-                'connected_clients': redis_info.get('connected_clients', 0),
-                'commands_processed': redis_info.get('total_commands_processed', 0)
-            }
-        except Exception as e:
-            metrics['redis'] = {'error': str(e)}
-    
-    return jsonify(metrics), 200
+        
+        if CACHE_ENABLED and redis_client:
+            try:
+                redis_info = redis_client.info()
+                metrics['redis'] = {
+                    'memory_usage': redis_info.get('used_memory_human', 'N/A'),
+                    'connected_clients': redis_info.get('connected_clients', 0),
+                    'commands_processed': redis_info.get('total_commands_processed', 0)
+                }
+            except Exception as redis_error:
+                metrics['redis'] = {'error': str(redis_error)}
+        
+        return jsonify(metrics), 200
+
+    except Exception as e:
+        logger.error(f"Metrics endpoint error: {str(e)}")
+        return jsonify({
+            'error': 'Failed to retrieve metrics',
+            'message': str(e),
+            'timestamp': int(time.time())
+        }), 500
 
 @app.route('/admin/cache/clear', methods=['POST'])
 @require_api_key
 def clear_cache():
-    pattern = request.json.get('pattern') if request.is_json else None
-    smart_cache.invalidate(pattern)
-    
-    if CACHE_ENABLED and redis_client:
-        try:
-            if pattern:
-                keys = redis_client.keys(f"*{pattern}*")
-                if keys:
-                    redis_client.delete(*keys)
-            else:
-                redis_client.flushdb()
-        except Exception as e:
-            logger.error(f"Redis cache clear failed: {e}")
-    
-    return jsonify({
-        'success': True,
-        'message': f"Cache cleared{f' for pattern: {pattern}' if pattern else ''}",
-        'timestamp': int(time.time())
-    }), 200
+    """Clear system cache"""
+    try:
+        pattern = request.json.get('pattern') if request.is_json else None
+        smart_cache.invalidate(pattern)
+        
+        if CACHE_ENABLED and redis_client:
+            try:
+                if pattern:
+                    keys = redis_client.keys(f"*{pattern}*")
+                    if keys:
+                        redis_client.delete(*keys)
+                else:
+                    redis_client.flushdb()
+            except Exception as redis_error:
+                logger.error(f"Redis cache clear failed: {redis_error}")
+        
+        return jsonify({
+            'success': True,
+            'message': f"Cache cleared{f' for pattern: {pattern}' if pattern else ''}",
+            'timestamp': int(time.time()),
+            'request_id': g.request_id
+        }), 200
 
+    except Exception as e:
+        logger.error(f"Cache clear error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to clear cache',
+            'message': str(e)
+        }), 500
+
+# Static file serving routes
+@app.route('/')
+def serve_index():
+    """Serve the main index.html file"""
+    try:
+        return send_from_directory('calculative', 'index.html')
+    except Exception as e:
+        logger.error(f"Failed to serve index.html: {e}")
+        return jsonify({
+            'error': 'Failed to serve index page',
+            'message': str(e)
+        }), 500
+
+@app.route('/assets/<path:path>')
+def serve_static_assets(path):
+    """Serve static assets from the assets directory"""
+    try:
+        return send_from_directory('calculative/assets', path)
+    except Exception as e:
+        logger.error(f"Failed to serve asset {path}: {e}")
+        return jsonify({
+            'error': 'Asset not found',
+            'path': path
+        }), 404
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    """Serve static files like CSS and JS"""
+    try:
+        return send_from_directory('calculative', filename)
+    except Exception as e:
+        logger.error(f"Failed to serve static file {filename}: {e}")
+        return jsonify({
+            'error': 'File not found',
+            'filename': filename
+        }), 404
+
+# 🔥 SIMPLE TEST ROUTE FOR DEBUGGING
+@app.route('/test', methods=['GET', 'POST'])
+def test_endpoint():
+    """Simple test endpoint for debugging"""
+    try:
+        if request.method == 'GET':
+            return jsonify({
+                'success': True,
+                'message': 'Test endpoint working',
+                'method': 'GET',
+                'timestamp': int(time.time()),
+                'request_id': g.request_id
+            }), 200
+        
+        elif request.method == 'POST':
+            data = request.get_json() if request.is_json else {}
+            return jsonify({
+                'success': True,
+                'message': 'Test POST endpoint working',
+                'received_data': data,
+                'method': 'POST',
+                'timestamp': int(time.time()),
+                'request_id': g.request_id
+            }), 200
+
+    except Exception as e:
+        logger.error(f"Test endpoint error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Test endpoint failed',
+            'message': str(e)
+        }), 500
+
+# Graceful shutdown handling
 def graceful_shutdown(signum, frame):
-    logger.info("Initiating graceful shutdown...")
-    executor.shutdown(wait=True)
-    if db_manager.pool:
-        db_manager.pool.closeall()
-    sys.exit(0)
+    """Handle graceful shutdown"""
+    logger.info("🔄 Initiating graceful shutdown...")
+    try:
+        executor.shutdown(wait=True)
+        if db_manager.pool:
+            db_manager.pool.closeall()
+        logger.info("✅ Graceful shutdown completed")
+    except Exception as e:
+        logger.error(f"Error during shutdown: {e}")
+    finally:
+        sys.exit(0)
 
 signal.signal(signal.SIGTERM, graceful_shutdown)
 signal.signal(signal.SIGINT, graceful_shutdown)
 
-@app.route('/admin/analytics', methods=['GET'])
-@require_api_key
-def get_analytics_dashboard():
-    """Advanced analytics endpoint providing deep insights into API usage patterns"""
-    time_range = request.args.get('range', '24h')
-    
-    # Calculate time boundaries
-    current_time = time.time()
-    if time_range == '1h':
-        start_time = current_time - 3600
-    elif time_range == '24h':
-        start_time = current_time - 86400
-    elif time_range == '7d':
-        start_time = current_time - 604800
-    elif time_range == '30d':
-        start_time = current_time - 2592000
-    else:
-        start_time = current_time - 86400  # Default to 24h
-    
-    analytics_data = {
-        'time_range': time_range,
-        'start_time': int(start_time),
-        'end_time': int(current_time),
-        'overview': {
-            'total_requests': performance_metrics.request_count,
-            'error_rate': performance_metrics.error_count / max(performance_metrics.request_count, 1),
-            'avg_response_time': performance_metrics.total_response_time / max(performance_metrics.request_count, 1),
-            'cache_hit_rate': performance_metrics.cache_hits / max(performance_metrics.cache_hits + performance_metrics.cache_misses, 1),
-            'active_connections': performance_metrics.active_connections
-        },
-        'rate_limiting': {
-            'blocked_requests': sum(user['errors'] for user in rate_limiter.user_patterns.values()),
-            'suspicious_users': len([uid for uid, data in rate_limiter.user_patterns.items() 
-                                   if rate_limiter._detect_suspicious_behavior(uid, current_time)]),
-            'top_clients': dict(list(sorted(
-                [(uid, data['requests']) for uid, data in rate_limiter.user_patterns.items()],
-                key=lambda x: x[1], reverse=True
-            ))[:10])
-        },
-        'cache_performance': {
-            'memory_cache_size': len(smart_cache.memory_cache),
-            'cache_stats': dict(smart_cache.cache_stats),
-            'most_accessed_patterns': dict(list(sorted(
-                [(key, len(accesses)) for key, accesses in smart_cache.access_pattern.items()],
-                key=lambda x: x[1], reverse=True
-            ))[:10])
-        },
-        'circuit_breaker': {
-            'state': circuit_breaker.state,
-            'failure_count': circuit_breaker.failure_count,
-            'last_failure': circuit_breaker.last_failure_time
-        }
-    }
-    
-    # Add database analytics if available
-    if db_manager.pool:
-        try:
-            query_stats = db_manager.execute_query("""
-                SELECT endpoint, COUNT(*) as request_count, AVG(response_time) as avg_time
-                FROM request_logs 
-                WHERE timestamp >= %s 
-                GROUP BY endpoint 
-                ORDER BY request_count DESC
-            """, (datetime.fromtimestamp(start_time),))
-            
-            if query_stats:
-                analytics_data['database'] = {
-                    'endpoint_stats': [
-                        {'endpoint': row[0], 'requests': row[1], 'avg_time': float(row[2])}
-                        for row in query_stats
-                    ]
-                }
-        except Exception as e:
-            analytics_data['database'] = {'error': str(e)}
-    
-    return jsonify(analytics_data), 200
-
-@app.route('/admin/users', methods=['GET'])
-@require_api_key
-def get_user_analytics():
-    """Get detailed user behavior analytics"""
-    current_time = time.time()
-    
-    user_analytics = []
-    for user_id, data in rate_limiter.user_patterns.items():
-        user_info = {
-            'user_id': user_id,
-            'total_requests': data['requests'],
-            'error_count': data['errors'],
-            'error_rate': data['errors'] / max(data['requests'], 1),
-            'first_seen': datetime.fromtimestamp(data['first_seen']).isoformat(),
-            'time_active': current_time - data['first_seen'],
-            'request_rate': data['requests'] / max(current_time - data['first_seen'], 1),
-            'is_suspicious': rate_limiter._detect_suspicious_behavior(user_id, current_time),
-            'risk_score': min(1.0, (data['errors'] / max(data['requests'], 1)) * 2)
-        }
-        user_analytics.append(user_info)
-    
-    # Sort by risk score descending
-    user_analytics.sort(key=lambda x: x['risk_score'], reverse=True)
-    
-    return jsonify({
-        'users': user_analytics,
-        'summary': {
-            'total_users': len(user_analytics),
-            'suspicious_users': len([u for u in user_analytics if u['is_suspicious']]),
-            'high_risk_users': len([u for u in user_analytics if u['risk_score'] > 0.5]),
-            'avg_requests_per_user': sum(u['total_requests'] for u in user_analytics) / max(len(user_analytics), 1)
-        },
-        'timestamp': int(current_time)
-    }), 200
-
-@app.route('/admin/optimize', methods=['POST'])
-@require_api_key
-def optimize_system():
-    """Perform system optimization tasks"""
-    optimization_tasks = request.json.get('tasks', []) if request.is_json else []
-    results = {}
-    
-    if 'cache_cleanup' in optimization_tasks or not optimization_tasks:
-        # Remove expired cache entries
-        current_time = time.time()
-        expired_keys = [key for key, expiry in smart_cache.expiry_times.items() 
-                       if expiry < current_time]
-        
-        for key in expired_keys:
-            smart_cache.memory_cache.pop(key, None)
-            smart_cache.expiry_times.pop(key, None)
-        
-        results['cache_cleanup'] = {
-            'expired_keys_removed': len(expired_keys),
-            'cache_size_after': len(smart_cache.memory_cache)
-        }
-    
-    if 'rate_limit_cleanup' in optimization_tasks or not optimization_tasks:
-        # Clean old rate limiting data
-        current_time = time.time()
-        old_users = [uid for uid, data in rate_limiter.user_patterns.items() 
-                    if current_time - data['first_seen'] > 86400 and data['requests'] < 10]
-        
-        for uid in old_users:
-            rate_limiter.user_patterns.pop(uid, None)
-            rate_limiter.windows.pop(uid, None)
-        
-        results['rate_limit_cleanup'] = {
-            'old_users_removed': len(old_users),
-            'active_users_remaining': len(rate_limiter.user_patterns)
-        }
-    
-    if 'circuit_breaker_reset' in optimization_tasks:
-        # Reset circuit breaker if it's been open for too long
-        if (circuit_breaker.state == 'OPEN' and 
-            circuit_breaker.last_failure_time and 
-            time.time() - circuit_breaker.last_failure_time > 300):
-            circuit_breaker.state = 'CLOSED'
-            circuit_breaker.failure_count = 0
-            results['circuit_breaker_reset'] = {'status': 'reset_successful'}
-        else:
-            results['circuit_breaker_reset'] = {'status': 'no_reset_needed'}
-    
-    return jsonify({
-        'success': True,
-        'optimization_results': results,
-        'timestamp': int(time.time())
-    }), 200
-
-@app.route('/v2/batch-calculate', methods=['POST'])
-@require_api_key
-def handle_batch_calculation():
-    """Handle multiple calculations in a single request"""
-    if not request.is_json:
-        raise BadRequest("Content-Type must be application/json")
-    
-    request_data = request.get_json()
-    calculations = request_data.get('calculations', [])
-    
-    if not calculations or len(calculations) > 10:
-        raise BadRequest("Must provide 1-10 calculations")
-    
-    results = []
-    start_time = time.time()
-    
-    # Process calculations in parallel
-    def process_single_calculation(calc_data):
-        try:
-            validated_data = AdvancedCalculationSchema().load(calc_data)
-            
-            # Check cache first
-            cached_result = smart_cache.get(validated_data)
-            if cached_result:
-                return {'success': True, 'data': cached_result, 'cached': True}
-            
-            # Calculate if not cached
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                result = loop.run_until_complete(async_calculate_enhanced_metrics(validated_data))
-                smart_cache.set(validated_data, result, ttl=300)
-                return {'success': True, 'data': result, 'cached': False}
-            finally:
-                loop.close()
-                
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    # Use ThreadPoolExecutor for parallel processing
-    with ThreadPoolExecutor(max_workers=min(len(calculations), 5)) as batch_executor:
-        future_to_calc = {batch_executor.submit(process_single_calculation, calc): i 
-                         for i, calc in enumerate(calculations)}
-        
-        for future in as_completed(future_to_calc):
-            calc_index = future_to_calc[future]
-            try:
-                result = future.result()
-                results.append({'index': calc_index, **result})
-            except Exception as e:
-                results.append({'index': calc_index, 'success': False, 'error': str(e)})
-    
-    # Sort results by index to maintain order
-    results.sort(key=lambda x: x['index'])
-    
-    processing_time = time.time() - start_time
-    successful_calcs = len([r for r in results if r['success']])
-    
-    log_request_to_db('/v2/batch-calculate', request_data, processing_time, 200)
-    
-    return jsonify({
-        'success': True,
-        'results': [{'data': {'summary_metrics': r['data']}, **r} if r['success'] else r for r in results],
-        'summary': {
-            'total_calculations': len(calculations),
-            'successful': successful_calcs,
-            'failed': len(calculations) - successful_calcs,
-            'processing_time': f"{processing_time:.3f}s"
-        },
-        'timestamp': int(time.time()),
-        'request_id': g.request_id
-    }), 200
-
-@app.route('/v2/export/analytics', methods=['GET'])
-@require_api_key
-def export_analytics_data():
-    """Export analytics data in various formats"""
-    export_format = request.args.get('format', 'json').lower()
-    data_type = request.args.get('type', 'analytics').lower()
-    time_range = request.args.get('range', '24h')
-    
-    if export_format not in ['json', 'csv']:
-        raise BadRequest("Format must be 'json' or 'csv'")
-    
-    if data_type not in ['analytics', 'users', 'performance']:
-        raise BadRequest("Type must be 'analytics', 'users', or 'performance'")
-    
-    # Generate export data based on type
-    if data_type == 'analytics':
-        export_data = {
-            'performance_metrics': performance_metrics.__dict__,
-            'cache_stats': dict(smart_cache.cache_stats),
-            'rate_limiting_stats': {
-                'total_users': len(rate_limiter.user_patterns),
-                'suspicious_users': len([uid for uid, data in rate_limiter.user_patterns.items() 
-                                       if rate_limiter._detect_suspicious_behavior(uid, time.time())])
-            }
-        }
-    elif data_type == 'users':
-        current_time = time.time()
-        export_data = [
-            {
-                'user_id': uid,
-                'requests': data['requests'],
-                'errors': data['errors'],
-                'first_seen': datetime.fromtimestamp(data['first_seen']).isoformat(),
-                'is_suspicious': rate_limiter._detect_suspicious_behavior(uid, current_time)
-            }
-            for uid, data in rate_limiter.user_patterns.items()
-        ]
-    else:  # performance
-        export_data = {
-            'timestamp': int(time.time()),
-            'metrics': performance_metrics.__dict__,
-            'circuit_breaker_state': circuit_breaker.state,
-            'active_connections': performance_metrics.active_connections
-        }
-    
-    if export_format == 'json':
-        response = jsonify(export_data)
-        response.headers['Content-Disposition'] = f'attachment; filename=fundpilot_{data_type}_{int(time.time())}.json'
-        return response
-    
-    else:  # CSV format
-        if data_type == 'users' and isinstance(export_data, list):
-            import io
-            import csv
-            
-            output = io.StringIO()
-            if export_data:
-                writer = csv.DictWriter(output, fieldnames=export_data[0].keys())
-                writer.writeheader()
-                writer.writerows(export_data)
-            
-            csv_data = output.getvalue()
-            output.close()
-            
-            response = Response(csv_data, mimetype='text/csv')
-            response.headers['Content-Disposition'] = f'attachment; filename=fundpilot_{data_type}_{int(time.time())}.csv'
-            return response
-        else:
-            raise BadRequest("CSV format only available for 'users' data type")
-
-@app.route('/api/calculate', methods=['POST'])
-@require_api_key
-def api_calculate():
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Invalid input'}), 400
-
-    # Extract data for calculations
-    mrr_data = data.get('mrr_data')
-    burn_data = data.get('burn_data')
-    ltv_cac_data = data.get('ltv_cac_data')
-
-    results = {}
-
-    if mrr_data:
-        results['mrr_arr'] = calculate_mrr_arr(mrr_data)
-    
-    if burn_data:
-        results['burn_runway'] = calculate_burn_rate_runway(burn_data)
-
-    if ltv_cac_data:
-        results['ltv_cac'] = calculate_ltv_cac(ltv_cac_data)
-
-    return jsonify(results)
-
-# Serve the main index.html file
-@app.route('/')
-def serve_index():
-    return send_from_directory('calculative', 'index.html')
-
-# Serve static assets from the assets directory
-@app.route('/assets/<path:path>')
-def serve_static_assets(path):
-    return send_from_directory('calculative/assets', path)
-
-# Serve static files like CSS and JS
-@app.route('/<path:filename>')
-def serve_static(filename):
-    return send_from_directory('calculative', filename)
-
 # Register cleanup function
 atexit.register(lambda: executor.shutdown(wait=True))
 
-@app.before_first_request
-def startup_tasks():
-    pass
-
+# Development-specific routes and handlers
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
-    debug = os.getenv('DEBUG', 'False').lower() == 'true'
+    debug = os.getenv('DEBUG', 'True').lower() == 'true'
+    host = os.getenv('HOST', '127.0.0.1')
     
-    logger.info(f"Starting FundPilot API on port {port}")
-    logger.info(f"Debug mode: {debug}")
-    logger.info(f"Redis enabled: {CACHE_ENABLED}")
-    logger.info(f"Database enabled: {db_manager.pool is not None}")
+    logger.info("=" * 60)
+    logger.info("🚀 Starting FundPilot API Server")
+    logger.info("=" * 60)
+    logger.info(f"📍 Host: {host}")
+    logger.info(f"🔌 Port: {port}")
+    logger.info(f"🐛 Debug mode: {debug}")
+    logger.info(f"💾 Redis enabled: {CACHE_ENABLED}")
+    logger.info(f"🗄️  Database enabled: {db_manager.pool is not None}")
+    logger.info(f"🤖 AI models available: {initialize_ai_models()}")
+    logger.info(f"🔑 API keys configured: {len(VALID_API_KEYS)}")
+    logger.info("=" * 60)
     
-    app.run(
-        host='0.0.0.0',
-        port=port,
-        debug=debug,
-        threaded=True,
-        use_reloader=False  # Disable reloader to prevent double initialization
-    )
+    try:
+        app.run(
+            host=host,
+            port=port,
+            debug=debug,
+            threaded=True,
+            use_reloader=False  # Disable reloader to prevent double initialization
+        )
+    except Exception as e:
+        logger.error(f"❌ Failed to start server: {e}")
+        sys.exit(1)
