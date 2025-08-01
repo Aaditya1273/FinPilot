@@ -368,7 +368,7 @@ class MLPredictor:
             'predicted_revenue': users * ltv * (1 - churn),
             'risk_score': min(1.0, churn * 2),
             'growth_potential': max(0.0, 1.0 - churn),
-            'recommendations': ['Optimize user acquisition', 'Reduce churn rate', 'Increase customer lifetime value']
+            'recommendations': self._generate_recommendations(data)
         }
     
     def _calculate_risk_score(self, data: Dict) -> float:
@@ -398,7 +398,36 @@ class MLPredictor:
         return min(1.0, efficiency_score + low_churn_bonus)
     
     def _generate_recommendations(self, data: Dict) -> List[str]:
-        recommendations = []
+        recommendations = set()
+        ltv = data.get('ltv', 0)
+        cac = data.get('cac', 1)
+        churn = data.get('churn', 0)
+        monthly_expenses = data.get('monthly_expenses', 0)
+        initial_capital = data.get('initial_capital', 0)
+
+        ltv_cac_ratio = ltv / max(cac, 1)
+        if ltv_cac_ratio < 3.0:
+            recommendations.add("Improve LTV/CAC ratio. Aim for a ratio of at least 3:1 by increasing customer lifetime value or reducing acquisition costs.")
+        if ltv_cac_ratio < 1.0:
+            recommendations.add("Your LTV/CAC ratio is below 1, meaning you're losing money on each new customer. Immediately focus on reducing CAC or increasing LTV.")
+
+        if churn > 0.05: # 5% monthly churn
+            recommendations.add("High churn rate detected. Focus on customer retention strategies to reduce churn and improve long-term stability.")
+
+        if 'summary_metrics' in data and 'runway' in data['summary_metrics']:
+            runway = data['summary_metrics']['runway']
+            if runway < 12:
+                recommendations.add("Your financial runway is less than 12 months. Prioritize extending your runway by increasing revenue or reducing expenses.")
+            if runway < 6:
+                recommendations.add("Critical Alert: Runway is less than 6 months. Take immediate action to secure funding or drastically cut costs to avoid running out of capital.")
+
+        if cac > ltv:
+            recommendations.add("Customer Acquisition Cost is higher than Lifetime Value. Re-evaluate your marketing channels and acquisition strategy.")
+
+        if not recommendations:
+            recommendations.add("Your key metrics look healthy. Focus on scaling your current strategies and exploring new growth opportunities.")
+
+        return list(recommendations)
         
         churn = data.get('churn', 0)
         if churn > 0.2:

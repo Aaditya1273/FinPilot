@@ -41,8 +41,8 @@
                             <input type="number" id="monthly_growth" value="10" step="0.1" required>
                         </div>
                         <div class="form-group">
-                            <label for="churn">Monthly Churn (%)</label>
-                            <input type="number" id="churn" value="5" step="0.1" required>
+                            <label for="churn">Monthly Churn (Decimal)</label>
+                            <input type="number" id="churn" value="0.05" step="0.001" min="0.001" max="0.999" required>
                         </div>
                         <div class="form-group">
                             <label for="ltv">ARPU ($)</label>
@@ -58,7 +58,7 @@
                         </div>
                         <div class="form-group">
                             <label for="cac">CAC ($)</label>
-                            <input type="number" id="cac" value="100" required>
+                            <input type="number" id="cac" value="100" min="0.01" max="10000" required>
                         </div>
                     </div>
                     <button type="submit" id="generate-btn" class="btn btn-primary">Generate Model</button>
@@ -66,7 +66,7 @@
             </section>
 
             <!-- Results Section -->
-            <section id="results-container" class="results-section" style="display: none;">
+            <section id="results-container" class="card" style="display: none;">
                 <div id="spinner" class="spinner" style="display: none;"></div>
                 <div id="results-content"></div>
             </section>
@@ -128,19 +128,57 @@
 
                 bindEvents() {
                     if (this.elements.form) this.elements.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+
+                    const churnInput = document.getElementById('churn');
+                    if (churnInput) {
+                        churnInput.addEventListener('input', function() {
+                            const val = parseFloat(this.value);
+                            if (val < 0.001 || val > 0.999) {
+                                this.setCustomValidity('Churn must be a decimal between 0.001 and 0.999.');
+                            } else {
+                                this.setCustomValidity('');
+                            }
+                        });
+                    }
+
+                    const cacInput = document.getElementById('cac');
+                    if (cacInput) {
+                        cacInput.addEventListener('input', function() {
+                            const val = parseFloat(this.value);
+                            if (val < 0.01 || val > 10000) {
+                                this.setCustomValidity('CAC must be between 0.01 and 10,000.');
+                            } else {
+                                this.setCustomValidity('');
+                            }
+                        });
+                    }
                 }
 
                 async handleFormSubmit(event) {
                     event.preventDefault();
                     this.toggleSpinner(true);
 
+                    const churnValue = parseFloat(document.getElementById('churn').value);
+                    if (isNaN(churnValue) || churnValue < 0.001 || churnValue > 0.999) {
+                        this.showNotification('Churn must be a decimal between 0.001 and 0.999.', 'error');
+                        this.toggleSpinner(false);
+                        return;
+                    }
+
+                    const cacValue = parseFloat(document.getElementById('cac').value);
+                    if (isNaN(cacValue) || cacValue < 0.01 || cacValue > 10000) {
+                        this.showNotification('CAC must be between 0.01 and 10000.', 'error');
+                        this.toggleSpinner(false);
+                        return;
+                    }
+
                     const formData = {
                         users: parseInt(document.getElementById('users').value) || 0,
-                        churn: parseFloat(document.getElementById('churn').value) / 100.0,
+                        churn: churnValue,
                         ltv: parseFloat(document.getElementById('ltv').value) || 0,
                         monthly_expenses: parseFloat(document.getElementById('monthly_expenses').value) || 0,
                         initial_capital: parseFloat(document.getElementById('initial_capital').value) || 0,
-                        cac: parseFloat(document.getElementById('cac').value) || 0,
+                        cac: cacValue,
                     };
 
                     try {
@@ -160,6 +198,8 @@
                         }
 
                         this.updateUI(result.data);
+                        // Make sure the results container is visible
+                        this.elements.resultsContainer.style.display = 'block';
 
                     } catch (error) {
                         console.error('Error:', error);
@@ -175,11 +215,26 @@
                         return;
                     }
                     const metrics = data.summary_metrics;
+                    const recommendations = metrics.recommendations;
+                    delete metrics.recommendations; // Remove recommendations from the main metrics grid
+
                     this.elements.resultsContent.innerHTML = `
-                        <h3>Summary Metrics</h3>
-                        <ul>
-                            ${Object.entries(metrics).map(([key, value]) => `<li><strong>${this.formatMetricName(key)}:</strong> ${this.formatMetricValue(value)}</li>`).join('')}
-                        </ul>`;
+                        <h2 class="section-title">Summary Metrics</h2>
+                        <div class="metrics-grid">
+                            ${Object.entries(metrics).map(([key, value]) => `
+                                <div class="metric-card">
+                                    <div class="metric-label">${this.formatMetricName(key)}</div>
+                                    <div class="metric-value">${this.formatMetricValue(value, key)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        ${recommendations ? `
+                        <div class="card" style="margin-top: 2rem;">
+                            <h3 class="section-title" style="margin-bottom: 1rem;">Recommendations</h3>
+                            <p>${recommendations}</p>
+                        </div>
+                        ` : ''}
+                    `;
                     this.elements.resultsContainer.style.display = 'block';
                 }
 
@@ -203,11 +258,33 @@
                     return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 }
 
-                formatMetricValue(value) {
-                    if (typeof value === 'number') {
+                formatMetricValue(value, key) {
+                    if (typeof value !== 'number') {
+                        return value;
+                    }
+
+                    // Special case for break_even_users - apply K/M formatting without currency symbol
+                    if (key === 'break_even_users') {
+                        if (Math.abs(value) >= 1000000) {
+                            return (value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'M';
+                        } else if (Math.abs(value) >= 1000) {
+                            return (value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'K';
+                        }
+                    }
+
+                    const nonCurrencyKeys = ['ltv_cac_ratio', 'risk_score', 'runway', 'growth_potential'];
+                    if (nonCurrencyKeys.includes(key)) {
+                        return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    }
+
+                    // Format large numbers with M and K notation
+                    if (Math.abs(value) >= 1000000) {
+                        return '$' + (value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'M';
+                    } else if (Math.abs(value) >= 1000) {
+                        return '$' + (value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'K';
+                    } else {
                         return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
                     }
-                    return value;
                 }
             }
 

@@ -47,10 +47,18 @@ To get a local copy up and running, follow these simple steps.
    pip install -r requirements.txt
    ```
 
-## Usage
+## Running the Application
 
-1. Run the Flask application:
-   ```sh
-   python app.py
-   ```
-2. Open your web browser and navigate to `http://127.0.0.1:5000` to view the application.
+1.  **Start the Backend Server**:
+    From the root directory of the project, run the following command to start the Flask server:
+    ```sh
+    python -m flask run
+    ```
+    This will start the backend API on `http://127.0.0.1:5000`.
+
+2.  **Access the Frontend**:
+    Open your web browser and navigate to one of the following URLs:
+    -   **Main Application**: [http://127.0.0.1:5000/calculative](http://127.0.0.1:5000/calculative) - This is the main financial modeling tool.
+    -   **Landing Page**: [http://127.0.0.1:5000/](http://127.0.0.1:5000/) - The project's landing page.
+
+The application will now be running, and you can start using the financial modeling tools and the AI advisor.
