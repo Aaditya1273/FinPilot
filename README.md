@@ -1,5 +1,7 @@
 # FinPilot - AI-Powered Financial Workflow
 
+![FinPilot Banner](./svg/sdk.png)
+
 ![FinPilot](https://img.shields.io/badge/FinPilot-AI--Powered-blueviolet?style=for-the-badge&logo=openai)
 
 **Navigate your financial future with AI-powered insights. FinPilot offers advanced financial modeling, predictive analytics, and an intelligent advisor to empower your strategic decisions and drive business growth.**
@@ -81,7 +83,10 @@ FinPilot is designed with a modern, user-centric interface to make financial mod
 
 4.  **Run the application:**
     ```bash
-    python app.py
+    python app.py 
+    ```
+    ```bash
+    start landing.html
     ```
 
 5.  Open your browser and navigate to `http://127.0.0.1:5000`.
