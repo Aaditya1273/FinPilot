@@ -25,22 +25,71 @@ from dotenv import load_dotenv
 
 from flask import Flask, request, jsonify, g, Response, render_template, send_from_directory
 from flask_cors import CORS
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from werkzeug.exceptions import BadRequest, InternalServerError, Unauthorized, TooManyRequests
 from werkzeug.middleware.proxy_fix import ProxyFix
-import redis
-from redis.sentinel import Sentinel
-import psycopg2
-from psycopg2.pool import ThreadedConnectionPool
-from marshmallow import Schema, fields, ValidationError, validate, post_load
-import jwt
-from cryptography.fernet import Fernet
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
-import joblib
+
+# Optional imports with fallbacks for Vercel compatibility
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    LIMITER_AVAILABLE = True
+except ImportError:
+    print("⚠️  Warning: flask_limiter not available. Rate limiting disabled.")
+    LIMITER_AVAILABLE = False
+
+try:
+    import redis
+    from redis.sentinel import Sentinel
+    REDIS_AVAILABLE = True
+except ImportError:
+    print("⚠️  Warning: redis not available. Caching disabled.")
+    REDIS_AVAILABLE = False
+
+try:
+    import psycopg2
+    from psycopg2.pool import ThreadedConnectionPool
+    POSTGRES_AVAILABLE = True
+except ImportError:
+    print("⚠️  Warning: psycopg2 not available. Database disabled.")
+    POSTGRES_AVAILABLE = False
+
+try:
+    from marshmallow import Schema, fields, ValidationError, validate, post_load
+    MARSHMALLOW_AVAILABLE = True
+except ImportError:
+    print("⚠️  Warning: marshmallow not available. Advanced validation disabled.")
+    MARSHMALLOW_AVAILABLE = False
+
+try:
+    import jwt
+    JWT_AVAILABLE = True
+except ImportError:
+    print("⚠️  Warning: PyJWT not available. JWT authentication disabled.")
+    JWT_AVAILABLE = False
+
+try:
+    from cryptography.fernet import Fernet
+    CRYPTO_AVAILABLE = True
+except ImportError:
+    print("⚠️  Warning: cryptography not available. Encryption disabled.")
+    CRYPTO_AVAILABLE = False
+
+try:
+    import numpy as np
+    import pandas as pd
+    NUMPY_AVAILABLE = True
+except ImportError:
+    print("⚠️  Warning: numpy/pandas not available. Advanced analytics disabled.")
+    NUMPY_AVAILABLE = False
+
+try:
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.cluster import KMeans
+    import joblib
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    print("⚠️  Warning: scikit-learn not available. ML features disabled.")
+    SKLEARN_AVAILABLE = False
 
 # Import your custom modules with error handling
 try:
