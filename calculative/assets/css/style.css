@@ -52,7 +52,11 @@
 
 body {
     font-family: var(--font-sans);
-    background-color: #000000;
+    background: 
+        radial-gradient(circle at 20% 80%, rgba(74, 144, 226, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(156, 39, 176, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(0, 188, 212, 0.05) 0%, transparent 50%),
+        #000000;
     color: var(--text-primary);
     line-height: 1.6;
     font-synthesis: none;
@@ -65,6 +69,10 @@ body {
     max-width: 1280px;
     margin: 0 auto;
     padding: clamp(1rem, 5vw, 3rem);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
 }
 
 /* ------------------- */
@@ -78,11 +86,17 @@ body {
 .header h1 {
     font-size: clamp(2.5rem, 8vw, 4rem);
     font-weight: 800;
-    background: linear-gradient(120deg, #ffffff, rgba(255, 255, 255, 0.7));
+    background: linear-gradient(120deg, 
+        #ffffff 0%, 
+        #4a90e2 25%, 
+        #9c27b0 50%, 
+        #00bcd4 75%, 
+        #ffffff 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 0.5rem;
+    text-shadow: 0 0 30px rgba(74, 144, 226, 0.3);
 }
 
 .header p {
@@ -269,20 +283,40 @@ body {
 }
 
 .metric-card {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-    padding: 1.5rem;
+    background: linear-gradient(135deg, 
+        rgba(74, 144, 226, 0.08) 0%, 
+        rgba(156, 39, 176, 0.06) 50%,
+        rgba(0, 188, 212, 0.08) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: var(--radius-md);
+    padding: 1.5rem;
     text-align: center;
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+    animation: slideInUp 0.6s ease-out forwards;
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.2), 
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        0 0 0 1px rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    backdrop-filter: blur(15px) saturate(180%);
-    -webkit-backdrop-filter: blur(15px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.15);
     position: relative;
     overflow: hidden;
-    opacity: 0;
-    transform: translateY(30px) scale(0.95);
-    animation: slideInUp 0.6s ease-out forwards;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.metric-card:hover {
+    transform: translateY(-8px) scale(1.05);
+    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 
+        0 16px 48px rgba(0, 0, 0, 0.3), 
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.1),
+        0 0 30px rgba(74, 144, 226, 0.2);
+    background: linear-gradient(135deg, 
+        rgba(74, 144, 226, 0.12) 0%, 
+        rgba(156, 39, 176, 0.1) 50%,
+        rgba(0, 188, 212, 0.12) 100%);
 }
 
 .metric-card:nth-child(1) { animation-delay: 0.1s; }
@@ -392,6 +426,57 @@ body {
     100% {
         transform: scale(1);
     }
+}
+
+/* ------------------- */
+/*  Trend Indicators   */
+/* ------------------- */
+.metric-card.trend-good {
+    border-left: 4px solid #00ff88;
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+}
+
+.metric-card.trend-good .metric-value {
+    color: #00ff88;
+    text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+    animation: pulseGreen 2s ease-in-out infinite;
+}
+
+.metric-card.trend-warning {
+    border-left: 4px solid #ffaa00;
+    background: linear-gradient(135deg, rgba(255, 170, 0, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+}
+
+.metric-card.trend-warning .metric-value {
+    color: #ffaa00;
+    text-shadow: 0 0 10px rgba(255, 170, 0, 0.3);
+    animation: pulseOrange 2s ease-in-out infinite;
+}
+
+.metric-card.trend-poor {
+    border-left: 4px solid #ff4444;
+    background: linear-gradient(135deg, rgba(255, 68, 68, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+}
+
+.metric-card.trend-poor .metric-value {
+    color: #ff4444;
+    text-shadow: 0 0 10px rgba(255, 68, 68, 0.3);
+    animation: pulseRed 2s ease-in-out infinite;
+}
+
+@keyframes pulseGreen {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; text-shadow: 0 0 20px rgba(0, 255, 136, 0.5); }
+}
+
+@keyframes pulseOrange {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; text-shadow: 0 0 20px rgba(255, 170, 0, 0.5); }
+}
+
+@keyframes pulseRed {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; text-shadow: 0 0 20px rgba(255, 68, 68, 0.5); }
 }
 
 /* ------------------- */
@@ -557,14 +642,22 @@ body {
 }
 
 .chart-card {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: linear-gradient(135deg, 
+        rgba(74, 144, 226, 0.1) 0%, 
+        rgba(156, 39, 176, 0.08) 25%,
+        rgba(0, 188, 212, 0.06) 50%,
+        rgba(76, 175, 80, 0.08) 75%,
+        rgba(255, 152, 0, 0.1) 100%);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: var(--radius-lg);
     padding: 1.5rem;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        0 0 0 1px rgba(255, 255, 255, 0.05);
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2);
     position: relative;
     overflow: hidden;
 }
@@ -576,8 +669,14 @@ body {
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-    transition: left 0.5s;
+    background: linear-gradient(90deg, 
+        transparent, 
+        rgba(255, 255, 255, 0.1), 
+        rgba(74, 144, 226, 0.1),
+        rgba(255, 255, 255, 0.1),
+        transparent);
+    transition: left 0.6s ease;
+    z-index: 1;
 }
 
 .chart-card:hover::before {
@@ -585,21 +684,31 @@ body {
 }
 
 .chart-card:hover {
-    border-color: rgba(255, 255, 255, 0.3);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-    transform: translateY(-4px) scale(1.02);
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%);
+    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 
+        0 16px 48px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.1),
+        0 0 40px rgba(74, 144, 226, 0.2);
+    transform: translateY(-8px) scale(1.02);
+    background: linear-gradient(135deg, 
+        rgba(74, 144, 226, 0.15) 0%, 
+        rgba(156, 39, 176, 0.12) 25%,
+        rgba(0, 188, 212, 0.1) 50%,
+        rgba(76, 175, 80, 0.12) 75%,
+        rgba(255, 152, 0, 0.15) 100%);
 }
 
 .chart-card h3 {
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.95);
     font-size: 1.1rem;
     font-weight: 600;
     margin-bottom: 1.5rem;
     text-align: center;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     letter-spacing: 0.5px;
     position: relative;
+    z-index: 2;
 }
 
 .chart-card h3::after {
@@ -608,22 +717,115 @@ body {
     bottom: -8px;
     left: 50%;
     transform: translateX(-50%);
-    width: 40px;
+    width: 60px;
     height: 2px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    background: linear-gradient(90deg, 
+        rgba(74, 144, 226, 0.6), 
+        rgba(156, 39, 176, 0.6), 
+        rgba(0, 188, 212, 0.6));
     border-radius: 1px;
+    box-shadow: 0 0 8px rgba(74, 144, 226, 0.4);
 }
 
 .chart-card canvas {
     max-height: 300px;
     width: 100% !important;
     height: auto !important;
-    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.1));
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
     transition: filter 0.3s ease;
+    position: relative;
+    z-index: 2;
 }
 
 .chart-card:hover canvas {
-    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
+    filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.25));
+}
+
+/* ------------------- */
+/*  Chart Tooltips     */
+/* ------------------- */
+.chart-tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.95);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    max-width: 280px;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    line-height: 1.4;
+    text-align: left;
+}
+
+.info-icon {
+    display: inline-block;
+    margin-left: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.7;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    vertical-align: middle;
+}
+
+.info-icon:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+/* ------------------- */
+/*  Enhanced Animations */
+/* ------------------- */
+@keyframes chartFadeIn {
+    0% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.chart-card {
+    animation: chartFadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.chart-card:nth-child(1) { animation-delay: 0.1s; }
+.chart-card:nth-child(2) { animation-delay: 0.2s; }
+.chart-card:nth-child(3) { animation-delay: 0.3s; }
+.chart-card:nth-child(4) { animation-delay: 0.4s; }
+.chart-card:nth-child(5) { animation-delay: 0.5s; }
+.chart-card:nth-child(6) { animation-delay: 0.6s; }
+
+/* Shimmer effect for loading charts */
+.chart-card.loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.chart-card.loading::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    animation: shimmer 2s infinite;
+    z-index: 1;
+}
+
+@keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
 }
 
 @media (max-width: 768px) {

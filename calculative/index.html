@@ -274,7 +274,8 @@
                             const metric = metricsToShow[key];
                             const value = data.summary_metrics[key];
                             const cardElement = document.createElement('div');
-                            cardElement.className = 'metric-card';
+                            const trendClass = this.getTrendClass(key, value);
+                            cardElement.className = `metric-card ${trendClass}`;
                             cardElement.innerHTML = `
                                 <div class="metric-title">${metric.title}</div>
                                 <div class="metric-value" data-value="${value}" data-type="${metric.type}">0</div>
@@ -313,6 +314,66 @@
 
                 toggleSpinner(show) {
                     if (this.elements.spinner) this.elements.spinner.style.display = show ? 'block' : 'none';
+                }
+
+                addChartTooltip(canvasId, tooltipText) {
+                    const chartContainer = document.getElementById(canvasId).closest('.chart-card');
+                    if (!chartContainer) return;
+                    
+                    // Remove existing tooltip if any
+                    const existingTooltip = chartContainer.querySelector('.chart-tooltip');
+                    if (existingTooltip) {
+                        existingTooltip.remove();
+                    }
+                    
+                    // Add info icon and tooltip
+                    const chartTitle = chartContainer.querySelector('h3');
+                    if (chartTitle && !chartTitle.querySelector('.info-icon')) {
+                        const infoIcon = document.createElement('span');
+                        infoIcon.className = 'info-icon';
+                        infoIcon.innerHTML = ' ℹ️';
+                        infoIcon.style.cursor = 'pointer';
+                        infoIcon.style.marginLeft = '8px';
+                        infoIcon.style.fontSize = '14px';
+                        chartTitle.appendChild(infoIcon);
+                        
+                        // Create tooltip element
+                        const tooltip = document.createElement('div');
+                        tooltip.className = 'chart-tooltip';
+                        tooltip.textContent = tooltipText;
+                        tooltip.style.cssText = `
+                            position: absolute;
+                            background: rgba(0, 0, 0, 0.9);
+                            color: white;
+                            padding: 12px 16px;
+                            border-radius: 8px;
+                            font-size: 12px;
+                            max-width: 250px;
+                            z-index: 1000;
+                            opacity: 0;
+                            pointer-events: none;
+                            transition: opacity 0.3s ease;
+                            backdrop-filter: blur(10px);
+                            border: 1px solid rgba(255, 255, 255, 0.2);
+                            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+                        `;
+                        
+                        chartContainer.style.position = 'relative';
+                        chartContainer.appendChild(tooltip);
+                        
+                        // Show/hide tooltip on hover
+                        infoIcon.addEventListener('mouseenter', (e) => {
+                            const rect = infoIcon.getBoundingClientRect();
+                            const containerRect = chartContainer.getBoundingClientRect();
+                            tooltip.style.left = (rect.left - containerRect.left - 125) + 'px';
+                            tooltip.style.top = (rect.bottom - containerRect.top + 5) + 'px';
+                            tooltip.style.opacity = '1';
+                        });
+                        
+                        infoIcon.addEventListener('mouseleave', () => {
+                            tooltip.style.opacity = '0';
+                        });
+                    }
                 }
 
                 renderCharts(metrics) {
@@ -356,7 +417,8 @@
                     // Unit Economics Pie Chart
                     if (ltv && cac) {
                         this.renderPieChart('unit-economics-chart', 'Unit Economics', ['LTV', 'CAC'], [ltv, cac],
-                            ['rgba(255, 255, 255, 0.8)', 'rgba(100, 100, 100, 0.8)']);
+                            ['rgba(0, 255, 136, 0.8)', 'rgba(255, 107, 107, 0.8)'],
+                            'Unit Economics shows the relationship between customer lifetime value and acquisition cost. A healthy LTV:CAC ratio should be 3:1 or higher.');
                     }
                     
                     // Revenue Breakdown Pie Chart - Dynamic based on business model
@@ -368,7 +430,8 @@
                     this.renderPieChart('revenue-pie-chart', 'Revenue Sources', 
                         ['Subscription', 'One-time', 'Other'], 
                         [subscriptionRevenue, oneTimeRevenue, otherRevenue], 
-                        ['rgba(255, 255, 255, 0.8)', 'rgba(180, 180, 180, 0.8)', 'rgba(120, 120, 120, 0.8)']);
+                        ['rgba(74, 144, 226, 0.8)', 'rgba(255, 193, 7, 0.8)', 'rgba(156, 39, 176, 0.8)'],
+                        'Revenue breakdown shows your income sources distribution. SaaS businesses typically have 80-90% subscription revenue.');
                     
                     // Runway & Capital Line Chart - Using dynamic projections
                     this.renderLineChart('runway-chart', 'Runway & Capital', dynamicProjections.months, 
@@ -376,13 +439,14 @@
                             { 
                                 label: 'Capital ($)', 
                                 data: dynamicProjections.capital_projection, 
-                                borderColor: 'rgba(255, 255, 255, 0.9)', 
-                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                                borderColor: 'rgba(255, 152, 0, 0.9)', 
+                                backgroundColor: 'rgba(255, 152, 0, 0.2)',
                                 borderWidth: 3,
                                 fill: true,
                                 tension: 0.4
                             },
-                        ]);
+                        ],
+                        'Runway shows how long your capital will last based on current burn rate. Aim for 18+ months of runway.');
                     
                     // MRR Growth Line Chart - Using dynamic projections
                     this.renderLineChart('mrr-chart-canvas', 'MRR Growth', dynamicProjections.months, 
@@ -390,13 +454,14 @@
                             { 
                                 label: 'MRR ($)', 
                                 data: dynamicProjections.mrr_projection, 
-                                borderColor: 'rgba(200, 200, 200, 0.9)', 
-                                backgroundColor: 'rgba(200, 200, 200, 0.2)',
+                                borderColor: 'rgba(76, 175, 80, 0.9)', 
+                                backgroundColor: 'rgba(76, 175, 80, 0.2)',
                                 borderWidth: 3,
                                 fill: true,
                                 tension: 0.4
                             },
-                        ]);
+                        ],
+                        'MRR projection shows expected monthly recurring revenue growth based on your growth rate and churn.');
                     
                     // Expense Distribution Doughnut Chart - Dynamic based on actual expenses
                     const totalExpenses = opex;
@@ -409,14 +474,70 @@
                     this.renderDoughnutChart('expense-doughnut-chart', 'Expense Distribution', 
                         ['Personnel', 'Marketing', 'Operations', 'Technology', 'Other'], 
                         [personnelCost, marketingCost, operationsCost, technologyCost, otherCost],
-                        ['rgba(255, 255, 255, 0.8)', 'rgba(210, 210, 210, 0.8)', 'rgba(170, 170, 170, 0.8)', 'rgba(130, 130, 130, 0.8)', 'rgba(90, 90, 90, 0.8)']);
+                        ['rgba(233, 30, 99, 0.8)', 'rgba(63, 81, 181, 0.8)', 'rgba(0, 188, 212, 0.8)', 'rgba(139, 195, 74, 0.8)', 'rgba(255, 87, 34, 0.8)'],
+                        'Expense distribution shows how your monthly budget is allocated across different categories.');
                     
                     // Risk vs Growth Scatter Chart - Dynamic based on actual metrics
                     const dynamicRiskScore = this.calculateRiskScore(churnRate, monthlyBurn, initialCap);
                     const dynamicGrowthPotential = this.calculateGrowthPotential(monthlyGrowth, ltv, cac);
                     
                     this.renderScatterChart('risk-scatter-chart', 'Risk vs Growth Analysis', 
-                        [{ x: dynamicRiskScore, y: dynamicGrowthPotential }]);
+                        [{ x: dynamicRiskScore, y: dynamicGrowthPotential }],
+                        'Risk vs Growth shows your company position in the risk-reward matrix. Aim for high growth with manageable risk.');
+                }
+
+                getTrendClass(metricName, value) {
+                    // Smart metric classification based on financial best practices
+                    switch(metricName.toLowerCase()) {
+                        case 'ltv_cac_ratio':
+                            if (value >= 3) return 'trend-good';
+                            if (value >= 1.5) return 'trend-warning';
+                            return 'trend-poor';
+                        
+                        case 'runway':
+                            if (value >= 18) return 'trend-good';
+                            if (value >= 6) return 'trend-warning';
+                            return 'trend-poor';
+                        
+                        case 'risk_score':
+                            // Inverted logic - lower risk is better
+                            if (value <= 30) return 'trend-good';
+                            if (value <= 60) return 'trend-warning';
+                            return 'trend-poor';
+                        
+                        case 'burn_rate':
+                            // Inverted logic - lower burn is better (relative to revenue)
+                            const users = parseInt(document.getElementById('users').value) || 1000;
+                            const arpu = parseFloat(document.getElementById('ltv').value) || 50;
+                            const monthlyRevenue = users * arpu;
+                            const burnRatio = Math.abs(value) / monthlyRevenue;
+                            if (burnRatio <= 0.5) return 'trend-good';
+                            if (burnRatio <= 1.0) return 'trend-warning';
+                            return 'trend-poor';
+                        
+                        case 'growth_potential':
+                        case 'arr':
+                        case 'mrr':
+                        case 'ltv':
+                        case 'growth_efficiency':
+                            // Higher is better
+                            if (value >= 70) return 'trend-good';
+                            if (value >= 40) return 'trend-warning';
+                            return 'trend-poor';
+                        
+                        case 'churn_loss':
+                        case 'payback_period':
+                            // Lower is better
+                            if (value <= 30) return 'trend-good';
+                            if (value <= 60) return 'trend-warning';
+                            return 'trend-poor';
+                        
+                        default:
+                            // Default classification for other metrics
+                            if (value >= 50) return 'trend-good';
+                            if (value >= 25) return 'trend-warning';
+                            return 'trend-poor';
+                    }
                 }
 
                 animateNumber(element, targetValue, type) {
@@ -476,15 +597,27 @@
                     return Math.min(growthPoints + ratioPoints + basePotential, 100);
                 }
 
-                renderPieChart(canvasId, label, labels, data, colors = null) {
+                renderPieChart(canvasId, label, labels, data, colors = null, tooltip = '') {
                     const ctx = document.getElementById(canvasId).getContext('2d');
                     if (this.chartInstances[canvasId]) {
                         this.chartInstances[canvasId].destroy();
                     }
                     
-                    const defaultColors = ['rgba(255, 255, 255, 0.8)', 'rgba(210, 210, 210, 0.8)', 'rgba(170, 170, 170, 0.8)', 'rgba(130, 130, 130, 0.8)', 'rgba(90, 90, 90, 0.8)'];
+                    // Enhanced glassy color palette
+                    const defaultColors = [
+                        'rgba(255, 255, 255, 0.8)',
+                        'rgba(210, 210, 210, 0.8)', 
+                        'rgba(170, 170, 170, 0.8)', 
+                        'rgba(130, 130, 130, 0.8)', 
+                        'rgba(90, 90, 90, 0.8)'
+                    ];
                     const backgroundColors = colors || defaultColors;
                     const borderColors = backgroundColors.map(color => color.replace('0.8', '1'));
+                    
+                    // Add tooltip to chart container if provided
+                    if (tooltip) {
+                        this.addChartTooltip(canvasId, tooltip);
+                    }
                     
                     this.chartInstances[canvasId] = new Chart(ctx, {
                         type: 'pie',
@@ -495,29 +628,76 @@
                                 data: data,
                                 backgroundColor: backgroundColors,
                                 borderColor: borderColors,
-                                borderWidth: 2
+                                borderWidth: 2,
+                                hoverBorderWidth: 4,
+                                hoverOffset: 8
                             }]
                         },
                         options: { 
                             responsive: true, 
                             maintainAspectRatio: false,
+                            animation: {
+                                animateRotate: true,
+                                animateScale: true,
+                                duration: 1500,
+                                easing: 'easeOutQuart'
+                            },
                             plugins: {
                                 legend: {
-                                    position: 'bottom'
+                                    position: 'bottom',
+                                    labels: {
+                                        color: 'rgba(255, 255, 255, 0.9)',
+                                        font: {
+                                            size: 12,
+                                            weight: '500'
+                                        },
+                                        padding: 15,
+                                        usePointStyle: true,
+                                        pointStyle: 'circle'
+                                    }
+                                },
+                                tooltip: {
+                                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                    titleColor: 'rgba(255, 255, 255, 1)',
+                                    bodyColor: 'rgba(255, 255, 255, 0.9)',
+                                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                                    borderWidth: 1,
+                                    cornerRadius: 8,
+                                    displayColors: true,
+                                    callbacks: {
+                                        label: function(context) {
+                                            const value = context.parsed;
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = ((value / total) * 100).toFixed(1);
+                                            return `${context.label}: $${value.toLocaleString()} (${percentage}%)`;
+                                        }
+                                    }
                                 }
                             }
                         }
                     });
                 }
 
-                renderDoughnutChart(canvasId, label, labels, data, colors = null) {
+                renderDoughnutChart(canvasId, label, labels, data, colors = null, tooltip = '') {
                     const ctx = document.getElementById(canvasId).getContext('2d');
                     if (this.chartInstances[canvasId]) {
                         this.chartInstances[canvasId].destroy();
                     }
                     
-                    const defaultColors = ['rgba(255, 255, 255, 0.8)', 'rgba(210, 210, 210, 0.8)', 'rgba(170, 170, 170, 0.8)', 'rgba(130, 130, 130, 0.8)', 'rgba(90, 90, 90, 0.8)'];
+                    // Enhanced glassy color palette
+                    const defaultColors = [
+                        'rgba(255, 255, 255, 0.8)',
+                        'rgba(210, 210, 210, 0.8)', 
+                        'rgba(170, 170, 170, 0.8)', 
+                        'rgba(130, 130, 130, 0.8)', 
+                        'rgba(90, 90, 90, 0.8)'
+                    ];
                     const backgroundColors = colors || defaultColors;
+                    
+                    // Add tooltip to chart container if provided
+                    if (tooltip) {
+                        this.addChartTooltip(canvasId, tooltip);
+                    }
                     
                     this.chartInstances[canvasId] = new Chart(ctx, {
                         type: 'doughnut',
@@ -528,25 +708,66 @@
                                 data: data,
                                 backgroundColor: backgroundColors,
                                 borderColor: backgroundColors.map(color => color.replace('0.8', '1')),
-                                borderWidth: 2
+                                borderWidth: 2,
+                                hoverBorderWidth: 4,
+                                hoverOffset: 8
                             }]
                         },
                         options: { 
                             responsive: true, 
                             maintainAspectRatio: false,
+                            animation: {
+                                animateRotate: true,
+                                animateScale: true,
+                                duration: 1500,
+                                easing: 'easeOutQuart'
+                            },
                             plugins: {
                                 legend: {
-                                    position: 'bottom'
+                                    position: 'bottom',
+                                    labels: {
+                                        color: 'rgba(255, 255, 255, 0.9)',
+                                        font: {
+                                            size: 12,
+                                            weight: '500'
+                                        },
+                                        padding: 15,
+                                        usePointStyle: true,
+                                        pointStyle: 'circle'
+                                    }
+                                },
+                                tooltip: {
+                                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                    titleColor: 'rgba(255, 255, 255, 1)',
+                                    bodyColor: 'rgba(255, 255, 255, 0.9)',
+                                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                                    borderWidth: 1,
+                                    cornerRadius: 8,
+                                    displayColors: true,
+                                    callbacks: {
+                                        label: function(context) {
+                                            const value = context.parsed;
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = ((value / total) * 100).toFixed(1);
+                                            return `${context.label}: $${value.toLocaleString()} (${percentage}%)`;
+                                        }
+                                    }
                                 }
-                            }
+                            },
+                            cutout: '60%'
                         }
                     });
                 }
 
-                renderScatterChart(canvasId, label, data) {
+                renderScatterChart(canvasId, label, data, tooltip = '') {
                     const ctx = document.getElementById(canvasId).getContext('2d');
                     if (this.chartInstances[canvasId]) {
                         this.chartInstances[canvasId].destroy();
+                    }
+                    
+                    // Add tooltip to chart container if provided
+                    if (tooltip) {
+                        this.addChartTooltip(canvasId, tooltip);
                     }
                     
                     this.chartInstances[canvasId] = new Chart(ctx, {
@@ -555,62 +776,210 @@
                             datasets: [{
                                 label: 'Current Position',
                                 data: data,
-                                backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                                borderColor: 'rgba(100, 100, 100, 0.9)',
+                                backgroundColor: 'rgba(74, 144, 226, 0.8)',
+                                borderColor: 'rgba(156, 39, 176, 0.9)',
                                 borderWidth: 3,
-                                pointRadius: 10,
-                                pointHoverRadius: 12,
-                                pointBackgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                pointBorderColor: 'rgba(80, 80, 80, 1)',
-                                pointBorderWidth: 2
+                                pointRadius: 12,
+                                pointHoverRadius: 16,
+                                pointBackgroundColor: 'rgba(0, 188, 212, 0.9)',
+                                pointBorderColor: 'rgba(76, 175, 80, 1)',
+                                pointBorderWidth: 3,
+                                pointHoverBorderWidth: 4
                             }]
                         },
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
+                            animation: {
+                                duration: 1500,
+                                easing: 'easeOutQuart'
+                            },
                             scales: {
                                 x: {
                                     title: {
                                         display: true,
-                                        text: 'Risk Score'
+                                        text: 'Risk Score',
+                                        color: 'rgba(255, 255, 255, 0.9)',
+                                        font: {
+                                            size: 14,
+                                            weight: '600'
+                                        }
                                     },
                                     min: 0,
-                                    max: 100
+                                    max: 100,
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)',
+                                        lineWidth: 1
+                                    },
+                                    ticks: {
+                                        color: 'rgba(255, 255, 255, 0.7)',
+                                        font: {
+                                            size: 12
+                                        }
+                                    }
                                 },
                                 y: {
                                     title: {
                                         display: true,
-                                        text: 'Growth Potential'
+                                        text: 'Growth Potential',
+                                        color: 'rgba(255, 255, 255, 0.9)',
+                                        font: {
+                                            size: 14,
+                                            weight: '600'
+                                        }
                                     },
                                     min: 0,
-                                    max: 100
+                                    max: 100,
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)',
+                                        lineWidth: 1
+                                    },
+                                    ticks: {
+                                        color: 'rgba(255, 255, 255, 0.7)',
+                                        font: {
+                                            size: 12
+                                        }
+                                    }
                                 }
                             },
                             plugins: {
                                 legend: {
                                     display: false
+                                },
+                                tooltip: {
+                                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                    titleColor: 'rgba(255, 255, 255, 1)',
+                                    bodyColor: 'rgba(255, 255, 255, 0.9)',
+                                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                                    borderWidth: 1,
+                                    cornerRadius: 8,
+                                    displayColors: false,
+                                    callbacks: {
+                                        title: function() {
+                                            return 'Company Position';
+                                        },
+                                        label: function(context) {
+                                            const riskLevel = context.parsed.x < 30 ? 'Low' : context.parsed.x < 60 ? 'Medium' : 'High';
+                                            const growthLevel = context.parsed.y < 30 ? 'Low' : context.parsed.y < 70 ? 'Medium' : 'High';
+                                            return [
+                                                `Risk Score: ${context.parsed.x.toFixed(1)} (${riskLevel})`,
+                                                `Growth Potential: ${context.parsed.y.toFixed(1)} (${growthLevel})`
+                                            ];
+                                        }
+                                    }
                                 }
                             }
                         }
                     });
                 }
 
-                renderLineChart(canvasId, label, labels, datasets) {
+                renderLineChart(canvasId, label, labels, datasets, tooltip = '') {
                     const ctx = document.getElementById(canvasId).getContext('2d');
                     if (this.chartInstances[canvasId]) {
                         this.chartInstances[canvasId].destroy();
                     }
+                    
+                    // Add tooltip to chart container if provided
+                    if (tooltip) {
+                        this.addChartTooltip(canvasId, tooltip);
+                    }
+                    
+                    // Enhance datasets with glassy styling
+                    const enhancedDatasets = datasets.map(dataset => ({
+                        ...dataset,
+                        borderWidth: dataset.borderWidth || 3,
+                        tension: dataset.tension || 0.4,
+                        pointRadius: dataset.pointRadius || 4,
+                        pointHoverRadius: dataset.pointHoverRadius || 8,
+                        pointBorderWidth: dataset.pointBorderWidth || 2,
+                        pointHoverBorderWidth: dataset.pointHoverBorderWidth || 3,
+                        fill: dataset.fill !== undefined ? dataset.fill : true
+                    }));
+                    
                     this.chartInstances[canvasId] = new Chart(ctx, {
                         type: 'line',
                         data: {
                             labels: labels,
-                            datasets: datasets
+                            datasets: enhancedDatasets
                         },
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
+                            animation: {
+                                duration: 1500,
+                                easing: 'easeOutQuart'
+                            },
+                            interaction: {
+                                intersect: false,
+                                mode: 'index'
+                            },
                             scales: {
-                                y: { beginAtZero: true }
+                                x: {
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)',
+                                        lineWidth: 1
+                                    },
+                                    ticks: {
+                                        color: 'rgba(255, 255, 255, 0.7)',
+                                        font: {
+                                            size: 11
+                                        }
+                                    }
+                                },
+                                y: { 
+                                    beginAtZero: true,
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)',
+                                        lineWidth: 1
+                                    },
+                                    ticks: {
+                                        color: 'rgba(255, 255, 255, 0.7)',
+                                        font: {
+                                            size: 11
+                                        },
+                                        callback: function(value) {
+                                            if (value >= 1000000) {
+                                                return '$' + (value / 1000000).toFixed(1) + 'M';
+                                            } else if (value >= 1000) {
+                                                return '$' + (value / 1000).toFixed(0) + 'K';
+                                            }
+                                            return '$' + value.toLocaleString();
+                                        }
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    labels: {
+                                        color: 'rgba(255, 255, 255, 0.9)',
+                                        font: {
+                                            size: 12,
+                                            weight: '500'
+                                        },
+                                        padding: 15,
+                                        usePointStyle: true
+                                    }
+                                },
+                                tooltip: {
+                                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                    titleColor: 'rgba(255, 255, 255, 1)',
+                                    bodyColor: 'rgba(255, 255, 255, 0.9)',
+                                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                                    borderWidth: 1,
+                                    cornerRadius: 8,
+                                    displayColors: true,
+                                    callbacks: {
+                                        label: function(context) {
+                                            const value = context.parsed.y;
+                                            if (value >= 1000000) {
+                                                return `${context.dataset.label}: $${(value / 1000000).toFixed(2)}M`;
+                                            } else if (value >= 1000) {
+                                                return `${context.dataset.label}: $${(value / 1000).toFixed(1)}K`;
+                                            }
+                                            return `${context.dataset.label}: $${value.toLocaleString()}`;
+                                        }
+                                    }
+                                }
                             }
                         }
                     });
