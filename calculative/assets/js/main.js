@@ -1,6 +1,6 @@
 class FundPilot {
     constructor() {
-        this.API_ENDPOINT = '/api/calculate'; // Ensure this matches your Flask endpoint
+        this.API_ENDPOINT = '/v2/calculate'; // Fixed to match Flask endpoint
         this.elements = {
             form: document.getElementById('financial-form'),
             spinner: document.getElementById('spinner'),
@@ -71,21 +71,21 @@ class FundPilot {
         this.elements.metricsGrid.innerHTML = ''; // Clear previous results
 
         const metricsToShow = {
-            arr: { title: 'Arr', type: 'currency' },
-            break_even_users: { title: 'Break Even Users', type: 'number' },
+            arr: { title: 'ARR', type: 'currency' },
+            break_even_users: { title: 'Break Even Users', type: 'users' },
             burn_rate: { title: 'Burn Rate', type: 'currency' },
-            cac: { title: 'Cac', type: 'currency' },
+            cac: { title: 'CAC', type: 'currency' },
             churn_loss: { title: 'Churn Loss', type: 'currency' },
             growth_efficiency: { title: 'Growth Efficiency', type: 'number' },
             growth_potential: { title: 'Growth Potential', type: 'number' },
-            ltv: { title: 'Ltv', type: 'currency' },
-            ltv_cac_ratio: { title: 'Ltv Cac Ratio', type: 'number' },
-            mrr: { title: 'Mrr', type: 'currency' },
-            payback_period: { title: 'Payback Period', type: 'currency' },
+            ltv: { title: 'LTV', type: 'currency' },
+            ltv_cac_ratio: { title: 'LTV CAC Ratio', type: 'ratio' },
+            mrr: { title: 'MRR', type: 'currency' },
+            payback_period: { title: 'Payback Period', type: 'months' },
             predicted_revenue: { title: 'Predicted Revenue', type: 'currency' },
             profitability: { title: 'Profitability', type: 'currency' },
-            risk_score: { title: 'Risk Score', type: 'number' },
-            runway: { title: 'Runway', type: 'number' },
+            risk_score: { title: 'Risk Score', type: 'score' },
+            runway: { title: 'Runway', type: 'months' },
         };
 
         for (const key in metricsToShow) {
@@ -198,20 +198,42 @@ class FundPilot {
         }
 
         if (type === 'currency') {
-            if (Math.abs(value) >= 1000000) {
-                return '$' + (value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'M';
+            if (Math.abs(value) >= 1000000000) {
+                return '$' + (value / 1000000000).toFixed(1) + 'B';
+            } else if (Math.abs(value) >= 1000000) {
+                return '$' + (value / 1000000).toFixed(1) + 'M';
             } else if (Math.abs(value) >= 1000) {
-                return '$' + (value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'K';
+                return '$' + (value / 1000).toFixed(1) + 'K';
             } else {
-                return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                return '$' + value.toFixed(2);
             }
-        } else { // type is 'number'
+        } else if (type === 'users') {
             if (Math.abs(value) >= 1000000) {
-                return (value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'M';
+                return (value / 1000000).toFixed(1) + 'M';
             } else if (Math.abs(value) >= 1000) {
-                return (value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'K';
+                return (value / 1000).toFixed(1) + 'K';
             } else {
-                return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                return value.toFixed(0);
+            }
+        } else if (type === 'months') {
+            if (Math.abs(value) >= 12) {
+                return (value / 12).toFixed(1) + ' years';
+            } else {
+                return value.toFixed(0) + ' months';
+            }
+        } else if (type === 'ratio') {
+            return (value * 100).toFixed(2) + '%';
+        } else if (type === 'score') {
+            return value.toFixed(2);
+        } else { // type is 'number'
+            if (Math.abs(value) >= 1000000000) {
+                return (value / 1000000000).toFixed(1) + 'B';
+            } else if (Math.abs(value) >= 1000000) {
+                return (value / 1000000).toFixed(1) + 'M';
+            } else if (Math.abs(value) >= 1000) {
+                return (value / 1000).toFixed(1) + 'K';
+            } else {
+                return value.toFixed(2);
             }
         }
     }
@@ -382,6 +404,7 @@ class FundPilotAPI {
         };
 
         try {
+            console.log('🧮 Running calculation example...');
             const result = await this.makeRequest('/v2/calculate', sampleData, 'POST');
             console.log('✅ Calculation test passed');
             return result;
