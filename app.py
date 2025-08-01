@@ -1052,14 +1052,39 @@ def clear_cache():
 
 # Static file serving routes
 @app.route('/')
-def serve_index():
-    """Serve the main index.html file"""
+def serve_landing():
+    """Serve the landing page as the home page"""
+    try:
+        return send_from_directory('.', 'landing.html')
+    except Exception as e:
+        logger.error(f"Failed to serve landing.html: {e}")
+        return jsonify({
+            'error': 'Failed to serve landing page',
+            'message': str(e)
+        }), 500
+
+@app.route('/calculator')
+@app.route('/app')
+def serve_calculator():
+    """Serve the calculator/calculative page"""
     try:
         return send_from_directory('calculative', 'index.html')
     except Exception as e:
-        logger.error(f"Failed to serve index.html: {e}")
+        logger.error(f"Failed to serve calculator index.html: {e}")
         return jsonify({
-            'error': 'Failed to serve index page',
+            'error': 'Failed to serve calculator page',
+            'message': str(e)
+        }), 500
+
+@app.route('/about')
+def serve_about():
+    """Serve the about page"""
+    try:
+        return send_from_directory('.', 'about.html')
+    except Exception as e:
+        logger.error(f"Failed to serve about.html: {e}")
+        return jsonify({
+            'error': 'Failed to serve about page',
             'message': str(e)
         }), 500
 
@@ -1067,7 +1092,7 @@ def serve_index():
 def serve_static_assets(path):
     """Serve static assets from the assets directory"""
     try:
-        return send_from_directory('calculative/assets', path)
+        return send_from_directory('assets', path)
     except Exception as e:
         logger.error(f"Failed to serve asset {path}: {e}")
         return jsonify({
@@ -1075,11 +1100,39 @@ def serve_static_assets(path):
             'path': path
         }), 404
 
+@app.route('/calculative/assets/<path:path>')
+def serve_calculative_assets(path):
+    """Serve static assets from the calculative/assets directory"""
+    try:
+        return send_from_directory('calculative/assets', path)
+    except Exception as e:
+        logger.error(f"Failed to serve calculative asset {path}: {e}")
+        return jsonify({
+            'error': 'Asset not found',
+            'path': path
+        }), 404
+
+@app.route('/svg/<path:path>')
+def serve_svg_assets(path):
+    """Serve SVG assets"""
+    try:
+        return send_from_directory('svg', path)
+    except Exception as e:
+        logger.error(f"Failed to serve SVG {path}: {e}")
+        return jsonify({
+            'error': 'SVG not found',
+            'path': path
+        }), 404
+
 @app.route('/<path:filename>')
 def serve_static(filename):
     """Serve static files like CSS and JS"""
     try:
-        return send_from_directory('calculative', filename)
+        # First try to serve from calculative directory for calculator-related files
+        if filename.endswith(('.css', '.js', '.html')):
+            return send_from_directory('calculative', filename)
+        # Otherwise serve from root directory
+        return send_from_directory('.', filename)
     except Exception as e:
         logger.error(f"Failed to serve static file {filename}: {e}")
         return jsonify({
