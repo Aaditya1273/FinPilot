@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FinPilot Workflow - Premium Glass Design</title>
+    <link rel="icon" type="image/png" href="svg/logofin.png">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -763,6 +764,122 @@
             pointer-events: none;
             z-index: 1;
         }
+
+        /* Bright Theme Styles */
+        body.bright-theme {
+            background: linear-gradient(135deg, #ffffff 0%, #e3f2fd 100%) !important;
+        }
+
+        body.bright-theme::after {
+            background-image: 
+                radial-gradient(circle at 1px 1px, rgba(0,0,0,0.05) 1px, transparent 0);
+        }
+
+        body.bright-theme .glass-orb {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(200, 200, 255, 0.4));
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        body.bright-theme .sidebar {
+            background: rgba(255, 255, 255, 0.9) !important;
+            border-right: 1px solid rgba(0, 0, 0, 0.1) !important;
+        }
+
+        body.bright-theme .nav-item {
+            background: rgba(0, 0, 0, 0.05) !important;
+        }
+
+        body.bright-theme .nav-item:hover {
+            background: rgba(0, 0, 0, 0.1) !important;
+        }
+
+        body.bright-theme .nav-item.active {
+            background: rgba(102, 126, 234, 0.2) !important;
+        }
+
+        body.bright-theme .nav-item i {
+            color: #333 !important;
+        }
+
+        body.bright-theme .header-logo {
+            color: #333 !important;
+        }
+
+        body.bright-theme .search-box input {
+            background: rgba(0, 0, 0, 0.05) !important;
+            border: 1px solid rgba(0, 0, 0, 0.1) !important;
+            color: #333 !important;
+        }
+
+        body.bright-theme .search-box input::placeholder {
+            color: rgba(0, 0, 0, 0.5) !important;
+        }
+
+        body.bright-theme .search-box i {
+            color: #666 !important;
+        }
+
+        body.bright-theme .subtitle {
+            color: rgba(0, 0, 0, 0.6) !important;
+        }
+
+        body.bright-theme .title {
+            color: #333 !important;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        body.bright-theme .description {
+            color: rgba(0, 0, 0, 0.7) !important;
+        }
+
+        body.bright-theme .social-link {
+            background: rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        body.bright-theme .social-link:hover {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        body.bright-theme .social-link i {
+            color: #333;
+        }
+
+        body.bright-theme .glass-character {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        body.bright-theme .glass-icon {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        body.bright-theme .glass-icon i {
+            color: #666;
+        }
+
+        body.bright-theme .loading {
+            background: #f5f7fa;
+        }
+
+        body.bright-theme .glass-spinner {
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-top: 2px solid rgba(102, 126, 234, 0.8);
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        body.bright-theme .btn-primary {
+            background: linear-gradient(45deg, #333333, #000000) !important;
+            color: white !important;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        body.bright-theme .btn-primary:hover {
+            background: linear-gradient(45deg, #000000, #333333) !important;
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4) !important;
+        }
     </style>
 </head>
 <body>
@@ -788,8 +905,8 @@
             <a href="calculative/index.html" class="nav-item">
                 <i class="fas fa-chart-bar"></i>
             </a>
-            <div class="nav-item">
-                <i class="fas fa-cog"></i>
+            <div class="nav-item theme-toggle" id="themeToggle" title="Change to Bright Theme" onclick="toggleThemeDirectly()">
+                <i class="fas fa-sun"></i>
             </div>
             <a href="about.html" class="nav-item">
                 <i class="fas fa-question-circle"></i>
@@ -807,7 +924,7 @@
                     </div>
                     <div class="header-controls">
                         <div class="search-box">
-                            <input type="text" placeholder="Search something...">
+                            <input type="text" placeholder="Write something...">
                             <i class="fas fa-search"></i>
                         </div>
                         <div class="auth-buttons">
@@ -832,7 +949,7 @@
 
                 <div class="social-links">
                     <a href="#" class="social-link">
-                        <i class="fab fa-facebook-f"></i>
+                        <i class="fab fa-github"></i>
                     </a>
                     <a href="#" class="social-link">
                         <i class="fab fa-instagram"></i>
@@ -874,6 +991,33 @@
     </div>
 
     <script>
+        // Global theme toggle function for inline onclick
+        function toggleThemeDirectly() {
+            const body = document.body;
+            const themeToggle = document.getElementById('themeToggle');
+            
+            console.log('toggleThemeDirectly called - INLINE ONCLICK');
+            console.log('Current body classes:', body.className);
+            
+            if (body.classList.contains('bright-theme')) {
+                // Switch to dark theme
+                body.classList.remove('bright-theme');
+                themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+                themeToggle.title = 'Change to Bright Theme';
+                localStorage.setItem('theme', 'dark');
+                console.log('SWITCHED TO DARK THEME');
+            } else {
+                // Switch to bright theme
+                body.classList.add('bright-theme');
+                themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+                themeToggle.title = 'Change to Dark Theme';
+                localStorage.setItem('theme', 'bright');
+                console.log('SWITCHED TO BRIGHT THEME');
+            }
+            
+            console.log('New body classes:', body.className);
+        }
+        
         window.addEventListener('load', function() {
             // Enhanced loading screen
             setTimeout(function() {
@@ -881,7 +1025,7 @@
             }, 500); // Reduced delay for faster load
 
             // Smooth navigation interactions
-            document.querySelectorAll('.nav-item').forEach(item => {
+            document.querySelectorAll('.nav-item:not(.theme-toggle)').forEach(item => {
             item.addEventListener('click', function() {
                 document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
                 this.classList.add('active');
@@ -901,6 +1045,55 @@
                 }, 2500);
             }
         });
+
+        // Theme Toggle Functionality - Simplified and Direct
+        function toggleTheme() {
+            const body = document.body;
+            const themeToggle = document.getElementById('themeToggle');
+            
+            console.log('toggleTheme called');
+            console.log('Current body classes before toggle:', body.className);
+            
+            if (body.classList.contains('bright-theme')) {
+                // Switch to dark theme
+                body.classList.remove('bright-theme');
+                themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+                themeToggle.title = 'Change to Bright Theme';
+                localStorage.setItem('theme', 'dark');
+                console.log('Switched to DARK theme');
+            } else {
+                // Switch to bright theme
+                body.classList.add('bright-theme');
+                themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+                themeToggle.title = 'Change to Dark Theme';
+                localStorage.setItem('theme', 'bright');
+                console.log('Switched to BRIGHT theme');
+            }
+            
+            console.log('Current body classes after toggle:', body.className);
+        }
+        
+        // Attach event listener
+        const themeToggleBtn = document.getElementById('themeToggle');
+        if (themeToggleBtn) {
+            themeToggleBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleTheme();
+            });
+            console.log('Theme toggle event listener attached successfully');
+        } else {
+            console.error('Theme toggle button not found!');
+        }
+
+        // Load saved theme preference
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'bright') {
+            document.body.classList.add('bright-theme');
+            themeToggleBtn.innerHTML = '<i class="fas fa-moon"></i>';
+            themeToggleBtn.title = 'Change to Dark Theme';
+            console.log('Loaded bright theme from localStorage');
+        }
 
 // Enhanced glass particle system
 function createGlassParticles() {

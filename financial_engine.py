@@ -12,6 +12,7 @@ class FinancialInputs:
     monthly_expenses: float
     initial_capital: float
     cac: float
+    monthly_growth_rate: float
     
     def __post_init__(self):
         # Validate all numeric inputs
@@ -94,6 +95,35 @@ class FinancialCalculator:
             return 0.0
         return capital / burn_rate
     
+    def generate_projections(self, inputs: FinancialInputs, arpu: float) -> Dict[str, List]:
+        """Generate 12-month financial projections."""
+        mrr_projection = []
+        capital_projection = []
+        months = [f"Month {i+1}" for i in range(12)]
+
+        current_users = float(inputs.users)
+        current_capital = float(inputs.initial_capital)
+        growth_rate = inputs.monthly_growth_rate / 100.0
+
+        for _ in range(12):
+            mrr = current_users * arpu
+            mrr_projection.append(self._round_value(mrr))
+
+            net_flow = mrr - inputs.monthly_expenses
+            current_capital += net_flow
+            capital_projection.append(self._round_value(max(0, current_capital)))
+
+            churned_users = current_users * inputs.churn_rate
+            new_users = current_users * growth_rate
+            current_users += new_users - churned_users
+            current_users = max(0, current_users)
+
+        return {
+            "months": months,
+            "mrr_projection": mrr_projection,
+            "capital_projection": capital_projection,
+        }
+
     def _calculate_advanced_metrics(self, inputs: FinancialInputs, arpu: float) -> Tuple[float, Union[float, str], float, float, float]:
         """Calculate advanced business metrics"""
         # LTV:CAC ratio
@@ -140,7 +170,8 @@ class FinancialCalculator:
                 ltv=float(data['ltv']),
                 monthly_expenses=float(data['monthly_expenses']),
                 initial_capital=float(data['initial_capital']),
-                cac=float(data['cac'])
+                cac=float(data['cac']),
+                monthly_growth_rate=float(data.get('monthly_growth', 0))
             )
             
             # Get core metrics
@@ -151,6 +182,9 @@ class FinancialCalculator:
             
             # Calculate advanced metrics
             ltv_cac_ratio, payback_period, growth_efficiency, profitability, break_even = self._calculate_advanced_metrics(inputs, arpu)
+
+            # Generate projections
+            projections = self.generate_projections(inputs, arpu)
             
             # Create and return results with proper rounding
             return {
@@ -165,7 +199,8 @@ class FinancialCalculator:
                 'payback_period': self._round_value(payback_period) if isinstance(payback_period, (int, float)) else payback_period,
                 'growth_efficiency': self._round_value(growth_efficiency) if isinstance(growth_efficiency, (int, float)) else "Infinite",
                 'profitability': self._round_value(profitability),
-                'break_even_users': self._round_value(break_even) if isinstance(break_even, (int, float)) else "Infinite"
+                'break_even_users': self._round_value(break_even) if isinstance(break_even, (int, float)) else "Infinite",
+                'projections': projections
             }
             
         except KeyError as e:

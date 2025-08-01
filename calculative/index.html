@@ -66,18 +66,35 @@
             </section>
 
             <!-- Results Section -->
-            <section id="results-container" class="card" style="display: none;">
+            <section id="results-section" class="card" style="display: none;">
                 <div id="spinner" class="spinner" style="display: none;"></div>
-                <div id="results-content"></div>
-            </section>
 
-            <!-- Visuals Section -->
-            <section id="visuals-section" class="card hidden">
-                <h2 class="section-title">Financial Projections</h2>
-                <div class="charts-grid">
-                    <div class="chart-container"><canvas id="mrr-chart"></canvas></div>
-                    <div class="chart-container"><canvas id="capital-chart"></canvas></div>
-                    <div class="chart-container"><canvas id="unit-economics-chart"></canvas></div>
+                <div class="section-container">
+                    <h2>Summary Metrics</h2>
+                    <div id="metrics-grid" class="metrics-grid"></div>
+                </div>
+
+                <div class="section-container" id="recommendations-section" style="display: none;">
+                    <h2>Recommendations</h2>
+                    <div id="recommendations-content" class="recommendations-grid"></div>
+                </div>
+
+                <div class="section-container" id="charts-section" style="display: none;">
+                    <h2>Financial Projections</h2>
+                    <div class="charts-grid">
+                        <div class="chart-card">
+                            <h3>Unit Economics (LTV vs. CAC)</h3>
+                            <canvas id="unit-economics-chart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Runway & Capital Projection</h3>
+                            <canvas id="runway-chart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>MRR Growth Projection</h3>
+                            <canvas id="mrr-chart-canvas"></canvas> <!-- Renamed to avoid duplicate ID -->
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -116,13 +133,15 @@
 
                     this.elements = {
                         form: document.getElementById('financial-form'),
-                        resultsContainer: document.getElementById('results-container'),
-                        notificationContainer: document.getElementById('notification-container'),
-                        generateBtn: document.getElementById('generate-btn'),
+                        resultsSection: document.getElementById('results-section'),
+                        metricsGrid: document.getElementById('metrics-grid'),
+                        recommendationsSection: document.getElementById('recommendations-section'),
+                        recommendationsContent: document.getElementById('recommendations-content'),
+                        chartsSection: document.getElementById('charts-section'),
                         spinner: document.getElementById('spinner'),
-                        resultsContent: document.getElementById('results-content'),
+                        notification: document.getElementById('notification'),
                     };
-
+                    this.chartInstances = {};
                     this.bindEvents();
                 }
 
@@ -199,7 +218,7 @@
 
                         this.updateUI(result.data);
                         // Make sure the results container is visible
-                        this.elements.resultsContainer.style.display = 'block';
+                        this.elements.resultsSection.style.display = 'block';
 
                     } catch (error) {
                         console.error('Error:', error);
@@ -210,32 +229,52 @@
                 }
 
                 updateUI(data) {
-                    if (!data || !data.summary_metrics) {
-                        this.handleApiError(new Error('Invalid data structure received from server.'));
-                        return;
-                    }
-                    const metrics = data.summary_metrics;
-                    const recommendations = metrics.recommendations;
-                    delete metrics.recommendations; // Remove recommendations from the main metrics grid
+                    this.elements.resultsSection.style.display = 'block';
+                    this.elements.metricsGrid.innerHTML = ''; // Clear previous results
 
-                    this.elements.resultsContent.innerHTML = `
-                        <h2 class="section-title">Summary Metrics</h2>
-                        <div class="metrics-grid">
-                            ${Object.entries(metrics).map(([key, value]) => `
+                    const metricsToShow = {
+                        arr: { title: 'Arr', type: 'currency' },
+                        break_even_users: { title: 'Break Even Users', type: 'number' },
+                        burn_rate: { title: 'Burn Rate', type: 'currency' },
+                        cac: { title: 'Cac', type: 'currency' },
+                        churn_loss: { title: 'Churn Loss', type: 'currency' },
+                        growth_efficiency: { title: 'Growth Efficiency', type: 'number' },
+                        growth_potential: { title: 'Growth Potential', type: 'number' },
+                        ltv: { title: 'Ltv', type: 'currency' },
+                        ltv_cac_ratio: { title: 'Ltv Cac Ratio', type: 'number' },
+                        mrr: { title: 'Mrr', type: 'currency' },
+                        payback_period: { title: 'Payback Period', type: 'currency' },
+                        predicted_revenue: { title: 'Predicted Revenue', type: 'currency' },
+                        profitability: { title: 'Profitability', type: 'currency' },
+                        risk_score: { title: 'Risk Score', type: 'number' },
+                        runway: { title: 'Runway', type: 'number' },
+                    };
+
+                    for (const key in metricsToShow) {
+                        if (data.summary_metrics.hasOwnProperty(key)) {
+                            const metric = metricsToShow[key];
+                            const value = data.summary_metrics[key];
+                            const card = `
                                 <div class="metric-card">
-                                    <div class="metric-label">${this.formatMetricName(key)}</div>
-                                    <div class="metric-value">${this.formatMetricValue(value, key)}</div>
+                                    <div class="metric-title">${metric.title}</div>
+                                    <div class="metric-value">${this.formatMetric(value, metric.type)}</div>
                                 </div>
-                            `).join('')}
-                        </div>
-                        ${recommendations ? `
-                        <div class="card" style="margin-top: 2rem;">
-                            <h3 class="section-title" style="margin-bottom: 1rem;">Recommendations</h3>
-                            <p>${recommendations}</p>
-                        </div>
-                        ` : ''}
-                    `;
-                    this.elements.resultsContainer.style.display = 'block';
+                            `;
+                            this.elements.metricsGrid.innerHTML += card;
+                        }
+                    }
+
+                    if (data.recommendations && data.recommendations.length > 0) {
+                        this.elements.recommendationsSection.style.display = 'block';
+                        this.elements.recommendationsContent.innerHTML = data.recommendations.map(rec => `<div class="recommendation-card">${rec}</div>`).join('');
+                    } else {
+                        this.elements.recommendationsSection.style.display = 'none';
+                    }
+
+                    if (data.summary_metrics.projections) {
+                        this.elements.chartsSection.style.display = 'block';
+                        this.renderCharts(data.summary_metrics);
+                    }
                 }
 
                 handleApiError(error) {
@@ -246,44 +285,96 @@
                     if (this.elements.spinner) this.elements.spinner.style.display = show ? 'block' : 'none';
                 }
 
+                renderCharts(metrics) {
+                    const { projections, ltv, cac } = metrics;
+
+                    this.renderPieChart('unit-economics-chart', 'Unit Economics', ['LTV', 'CAC'], [ltv, cac]);
+                    this.renderLineChart('runway-chart', 'Runway & Capital', projections.months, 
+                        [
+                            { label: 'Capital ($)', data: projections.capital_projection, borderColor: 'rgba(75, 192, 192, 1)' },
+                        ]);
+                    this.renderLineChart('mrr-chart-canvas', 'MRR Growth', projections.months, 
+                        [
+                            { label: 'MRR ($)', data: projections.mrr_projection, borderColor: 'rgba(153, 102, 255, 1)' },
+                        ]);
+                }
+
+                renderPieChart(canvasId, label, labels, data) {
+                    const ctx = document.getElementById(canvasId).getContext('2d');
+                    if (this.chartInstances[canvasId]) {
+                        this.chartInstances[canvasId].destroy();
+                    }
+                    this.chartInstances[canvasId] = new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: label,
+                                data: data,
+                                backgroundColor: ['rgba(54, 162, 235, 0.8)', 'rgba(255, 99, 132, 0.8)'],
+                                borderColor: ['rgba(54, 162, 235, 1)', 'rgba(255, 99, 132, 1)'],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                }
+
+                renderLineChart(canvasId, label, labels, datasets) {
+                    const ctx = document.getElementById(canvasId).getContext('2d');
+                    if (this.chartInstances[canvasId]) {
+                        this.chartInstances[canvasId].destroy();
+                    }
+                    this.chartInstances[canvasId] = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { beginAtZero: true }
+                            }
+                        }
+                    });
+                }
+
                 showNotification(message, type = 'info') {
-                    const notification = document.createElement('div');
-                    notification.className = `notification ${type}`;
-                    notification.textContent = message;
-                    this.elements.notificationContainer.appendChild(notification);
-                    setTimeout(() => notification.remove(), 5000);
+                    this.elements.notification.textContent = message;
+                    this.elements.notification.className = `notification ${type}`;
+                    this.elements.notification.style.display = 'block';
+                    setTimeout(() => {
+                        this.elements.notification.style.display = 'none';
+                    }, 5000);
                 }
 
                 formatMetricName(name) {
                     return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 }
 
-                formatMetricValue(value, key) {
+                formatMetric(value, type) {
                     if (typeof value !== 'number') {
                         return value;
                     }
 
-                    // Special case for break_even_users - apply K/M formatting without currency symbol
-                    if (key === 'break_even_users') {
+                    if (type === 'currency') {
+                        if (Math.abs(value) >= 1000000) {
+                            return '$' + (value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'M';
+                        } else if (Math.abs(value) >= 1000) {
+                            return '$' + (value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'K';
+                        } else {
+                            return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                        }
+                    } else { // type is 'number'
                         if (Math.abs(value) >= 1000000) {
                             return (value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'M';
                         } else if (Math.abs(value) >= 1000) {
                             return (value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'K';
+                        } else {
+                            return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                         }
-                    }
-
-                    const nonCurrencyKeys = ['ltv_cac_ratio', 'risk_score', 'runway', 'growth_potential'];
-                    if (nonCurrencyKeys.includes(key)) {
-                        return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    }
-
-                    // Format large numbers with M and K notation
-                    if (Math.abs(value) >= 1000000) {
-                        return '$' + (value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'M';
-                    } else if (Math.abs(value) >= 1000) {
-                        return '$' + (value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'K';
-                    } else {
-                        return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
                     }
                 }
             }

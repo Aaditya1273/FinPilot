@@ -302,6 +302,9 @@
         .email-form {
             margin-bottom: 30px;
             animation: fadeInUp 0.8s ease 0.8s both;
+            display: flex;
+            justify-content: center;
+            width: 100%;
         }
         
         .email-input-group {

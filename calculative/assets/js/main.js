@@ -1,4 +1,273 @@
-// 🔥 FIXED FRONTEND JAVASCRIPT WITH PROPER ERROR HANDLING
+class FundPilot {
+    constructor() {
+        this.API_ENDPOINT = '/api/calculate'; // Ensure this matches your Flask endpoint
+        this.elements = {
+            form: document.getElementById('financial-form'),
+            spinner: document.getElementById('spinner'),
+            resultsSection: document.getElementById('results-section'),
+            metricsGrid: document.getElementById('metrics-grid'),
+            chartsSection: document.getElementById('charts-section'),
+            recommendationsSection: document.getElementById('recommendations-section'),
+            recommendationsContent: document.getElementById('recommendations-content'),
+            notification: document.getElementById('notification'),
+            exportJsonButton: document.getElementById('export-json'),
+            exportCsvButton: document.getElementById('export-csv'),
+            exportPdfButton: document.getElementById('export-pdf'),
+        };
+        this.chartInstances = {};
+        this.lastData = null;
+
+        if (!this.elements.form) {
+            console.error('Financial form not found!');
+            return;
+        }
+
+        this.init();
+    }
+
+    init() {
+        this.elements.form.addEventListener('submit', this.handleSubmit.bind(this));
+        this.elements.exportJsonButton.addEventListener('click', () => this.exportData('json'));
+        this.elements.exportCsvButton.addEventListener('click', () => this.exportData('csv'));
+        this.elements.exportPdfButton.addEventListener('click', this.exportPdf.bind(this));
+    }
+
+    async handleSubmit(event) {
+        event.preventDefault();
+        this.toggleSpinner(true);
+
+        const formData = new FormData(this.elements.form);
+        const data = Object.fromEntries(formData.entries());
+
+        try {
+            const response = await fetch(this.API_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                const errorDetails = result.details ? JSON.stringify(result.details) : result.error;
+                throw new Error(errorDetails || `HTTP error! status: ${response.status}`);
+            }
+            this.lastData = result.data;
+            this.updateUI(result.data);
+            this.elements.resultsSection.style.display = 'block';
+
+        } catch (error) {
+            console.error('Error:', error);
+            this.handleApiError(error);
+        } finally {
+            this.toggleSpinner(false);
+        }
+    }
+
+    updateUI(data) {
+        this.elements.resultsSection.style.display = 'block';
+        this.elements.metricsGrid.innerHTML = ''; // Clear previous results
+
+        const metricsToShow = {
+            arr: { title: 'Arr', type: 'currency' },
+            break_even_users: { title: 'Break Even Users', type: 'number' },
+            burn_rate: { title: 'Burn Rate', type: 'currency' },
+            cac: { title: 'Cac', type: 'currency' },
+            churn_loss: { title: 'Churn Loss', type: 'currency' },
+            growth_efficiency: { title: 'Growth Efficiency', type: 'number' },
+            growth_potential: { title: 'Growth Potential', type: 'number' },
+            ltv: { title: 'Ltv', type: 'currency' },
+            ltv_cac_ratio: { title: 'Ltv Cac Ratio', type: 'number' },
+            mrr: { title: 'Mrr', type: 'currency' },
+            payback_period: { title: 'Payback Period', type: 'currency' },
+            predicted_revenue: { title: 'Predicted Revenue', type: 'currency' },
+            profitability: { title: 'Profitability', type: 'currency' },
+            risk_score: { title: 'Risk Score', type: 'number' },
+            runway: { title: 'Runway', type: 'number' },
+        };
+
+        for (const key in metricsToShow) {
+            if (data.summary_metrics.hasOwnProperty(key)) {
+                const metric = metricsToShow[key];
+                const value = data.summary_metrics[key];
+                const card = `
+                    <div class="metric-card">
+                        <div class="metric-title">${metric.title}</div>
+                        <div class="metric-value">${this.formatMetric(value, metric.type)}</div>
+                    </div>
+                `;
+                this.elements.metricsGrid.innerHTML += card;
+            }
+        }
+
+        if (data.recommendations && data.recommendations.length > 0) {
+            this.elements.recommendationsSection.style.display = 'block';
+            this.elements.recommendationsContent.innerHTML = data.recommendations.map(rec => `<div class="recommendation-card">${rec}</div>`).join('');
+        } else {
+            this.elements.recommendationsSection.style.display = 'none';
+        }
+
+        if (data.summary_metrics.projections) {
+            this.elements.chartsSection.style.display = 'block';
+            this.renderCharts(data.summary_metrics);
+        }
+    }
+
+    handleApiError(error) {
+        this.showNotification(`API Error: ${error.message}`, 'error');
+    }
+
+    toggleSpinner(show) {
+        if (this.elements.spinner) this.elements.spinner.style.display = show ? 'block' : 'none';
+    }
+
+    renderCharts(metrics) {
+        const { projections, ltv, cac } = metrics;
+
+        this.renderPieChart('unit-economics-chart', 'Unit Economics', ['LTV', 'CAC'], [ltv, cac]);
+        this.renderLineChart('runway-chart', 'Runway & Capital', projections.months, 
+            [
+                { label: 'Capital ($)', data: projections.capital_projection, borderColor: 'rgba(75, 192, 192, 1)' },
+            ]);
+        this.renderLineChart('mrr-chart-canvas', 'MRR Growth', projections.months, 
+            [
+                { label: 'MRR ($)', data: projections.mrr_projection, borderColor: 'rgba(153, 102, 255, 1)' },
+            ]);
+    }
+
+    renderPieChart(canvasId, label, labels, data) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        if (this.chartInstances[canvasId]) {
+            this.chartInstances[canvasId].destroy();
+        }
+        this.chartInstances[canvasId] = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: label,
+                    data: data,
+                    backgroundColor: ['rgba(54, 162, 235, 0.8)', 'rgba(255, 99, 132, 0.8)'],
+                    borderColor: ['rgba(54, 162, 235, 1)', 'rgba(255, 99, 132, 1)'],
+                    borderWidth: 1
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    renderLineChart(canvasId, label, labels, datasets) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        if (this.chartInstances[canvasId]) {
+            this.chartInstances[canvasId].destroy();
+        }
+        this.chartInstances[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    showNotification(message, type = 'info') {
+        this.elements.notification.textContent = message;
+        this.elements.notification.className = `notification ${type}`;
+        this.elements.notification.style.display = 'block';
+        setTimeout(() => {
+            this.elements.notification.style.display = 'none';
+        }, 5000);
+    }
+
+    formatMetricName(name) {
+        return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    formatMetric(value, type) {
+        if (typeof value !== 'number') {
+            return value;
+        }
+
+        if (type === 'currency') {
+            if (Math.abs(value) >= 1000000) {
+                return '$' + (value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'M';
+            } else if (Math.abs(value) >= 1000) {
+                return '$' + (value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'K';
+            } else {
+                return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+            }
+        } else { // type is 'number'
+            if (Math.abs(value) >= 1000000) {
+                return (value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'M';
+            } else if (Math.abs(value) >= 1000) {
+                return (value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'K';
+            } else {
+                return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+        }
+    }
+
+    exportData(format) {
+        if (!this.lastData) {
+            this.showNotification('No data to export.', 'error');
+            return;
+        }
+
+        let dataStr;
+        let fileName = `financial_metrics_${new Date().toISOString()}`;
+
+        if (format === 'json') {
+            dataStr = JSON.stringify(this.lastData, null, 2);
+            fileName += '.json';
+        } else { // csv
+            const headers = Object.keys(this.lastData.summary_metrics);
+            const rows = [headers.join(',')];
+            const values = headers.map(header => this.lastData.summary_metrics[header]);
+            rows.push(values.join(','));
+            dataStr = rows.join('\n');
+            fileName += '.csv';
+        }
+
+        const blob = new Blob([dataStr], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    }
+
+    exportPdf() {
+        if (!this.lastData) {
+            this.showNotification('No data to generate PDF.', 'error');
+            return;
+        }
+        const { resultsSection } = this.elements;
+        const options = {
+            margin: 0.5,
+            filename: `financial_report_${new Date().toISOString()}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+        };
+        html2pdf().from(resultsSection).set(options).save();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.fundPilotApp = new FundPilot();
+});
 // Add this to your HTML or existing JS file
 
 class FundPilotAPI {
