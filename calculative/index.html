@@ -245,6 +245,9 @@
                 updateUI(data) {
                     this.elements.resultsSection.style.display = 'block';
                     this.elements.metricsGrid.innerHTML = ''; // Clear previous results
+                    
+                    // Add loading state
+                    this.elements.metricsGrid.classList.add('loading');
 
                     const metricsToShow = {
                         arr: { title: 'Arr', type: 'currency' },
@@ -268,13 +271,18 @@
                         if (data.summary_metrics.hasOwnProperty(key)) {
                             const metric = metricsToShow[key];
                             const value = data.summary_metrics[key];
-                            const card = `
-                                <div class="metric-card">
-                                    <div class="metric-title">${metric.title}</div>
-                                    <div class="metric-value">${this.formatMetric(value, metric.type)}</div>
-                                </div>
+                            const cardElement = document.createElement('div');
+                            cardElement.className = 'metric-card';
+                            cardElement.innerHTML = `
+                                <div class="metric-title">${metric.title}</div>
+                                <div class="metric-value" data-value="${value}" data-type="${metric.type}">0</div>
                             `;
-                            this.elements.metricsGrid.innerHTML += card;
+                            this.elements.metricsGrid.appendChild(cardElement);
+                            
+                            // Animate the number counting
+                            setTimeout(() => {
+                                this.animateNumber(cardElement.querySelector('.metric-value'), value, metric.type);
+                            }, 100 * Object.keys(metricsToShow).indexOf(key));
                         }
                     }
 
@@ -285,6 +293,11 @@
                         this.elements.recommendationsSection.style.display = 'none';
                     }
 
+                    // Remove loading state after all animations
+                    setTimeout(() => {
+                        this.elements.metricsGrid.classList.remove('loading');
+                    }, 2000);
+                    
                     // Always show charts section if we have summary metrics
                     if (data.summary_metrics) {
                         this.elements.chartsSection.style.display = 'block';
@@ -402,6 +415,36 @@
                     
                     this.renderScatterChart('risk-scatter-chart', 'Risk vs Growth Analysis', 
                         [{ x: dynamicRiskScore, y: dynamicGrowthPotential }]);
+                }
+
+                animateNumber(element, targetValue, type) {
+                    const startValue = 0;
+                    const duration = 1500; // 1.5 seconds
+                    const startTime = performance.now();
+                    
+                    const animate = (currentTime) => {
+                        const elapsed = currentTime - startTime;
+                        const progress = Math.min(elapsed / duration, 1);
+                        
+                        // Easing function for smooth animation
+                        const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+                        
+                        const currentValue = startValue + (targetValue - startValue) * easeOutQuart;
+                        
+                        // Format and display the current value
+                        element.textContent = this.formatMetric(currentValue, type);
+                        
+                        if (progress < 1) {
+                            requestAnimationFrame(animate);
+                        } else {
+                            // Ensure final value is exact
+                            element.textContent = this.formatMetric(targetValue, type);
+                            element.classList.add('updated');
+                            setTimeout(() => element.classList.remove('updated'), 800);
+                        }
+                    };
+                    
+                    requestAnimationFrame(animate);
                 }
 
                 calculateRiskScore(churnRate, monthlyBurn, initialCapital) {
