@@ -9,7 +9,7 @@
 
 > **Navigate your financial future with AI-powered insights and stunning visualizations**
 
-FinPilot is a cutting-edge financial modeling platform that combines advanced analytics, predictive modeling, and an intuitive glassmorphism interface to empower strategic business decisions and drive growth.
+FinPilot is a cutting-edge financial modeling platform that combines advanced analytics, predictive modeling, and an intuitive glassmorphism interface to empower strategic business decisions and drive growth...
 
 ---
 

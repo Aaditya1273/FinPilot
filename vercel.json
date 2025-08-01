@@ -1,0 +1,50 @@
+{
+    "version": 2,
+    "builds": [
+      {
+        "src": "api/index.py",
+        "use": "@vercel/python"
+      }
+    ],
+    "routes": [
+      {
+        "src": "/api/(.*)",
+        "dest": "api/index.py"
+      },
+      {
+        "src": "/calculate",
+        "dest": "api/index.py"
+      },
+      {
+        "src": "/calculator",
+        "dest": "api/index.py"
+      },
+      {
+        "src": "/about",
+        "dest": "api/index.py"
+      },
+      {
+        "src": "/",
+        "dest": "api/index.py"
+      },
+      {
+        "src": "/assets/(.*)",
+        "dest": "api/index.py"
+      },
+      {
+        "src": "/calculative/assets/(.*)",
+        "dest": "api/index.py"
+      },
+      {
+        "src": "/svg/(.*)",
+        "dest": "api/index.py"
+      },
+      {
+        "src": "/(.*)",
+        "dest": "api/index.py"
+      }
+    ],
+    "env": {
+      "FLASK_ENV": "production"
+    }
+  }
