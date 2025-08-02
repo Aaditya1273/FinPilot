@@ -35,6 +35,3 @@
   from = "/*"
   to = "/index.html"
   status = 200
-
-[functions]
-  python_runtime = "python3.9"
