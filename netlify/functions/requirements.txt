@@ -1,0 +1,2 @@
+# Minimal dependencies for Netlify Functions
+# No external dependencies needed for our calculation function

@@ -1352,3 +1352,66 @@ if __name__ == '__main__':
 
 # Add this line at the very end for Vercel compatibility
 application = app
+
+def validate_calculations():
+    """Test function to validate financial calculations accuracy"""
+    print("🧮 Validating Financial Calculations...")
+    
+    # Test case 1: Basic SaaS metrics
+    test_data = {
+        'users': 1000,
+        'ltv': 50,  # ARPU
+        'cac': 100,
+        'churn': 0.05,  # 5% monthly churn
+        'monthly_expenses': 15000,
+        'initial_capital': 100000,
+        'monthly_growth': 10,  # 10% growth
+        'cogs': 20  # 20% COGS
+    }
+    
+    results = calculate_metrics(test_data)
+    
+    # Expected calculations
+    expected_mrr = 1000 * 50  # 50,000
+    expected_arr = expected_mrr * 12  # 600,000
+    expected_actual_ltv = 50 / 0.05  # 1,000
+    expected_ltv_cac_ratio = 1000 / 100  # 10.0
+    expected_runway = 100000 / 15000  # 6.67 months
+    expected_break_even = 15000 / (50 * 0.8)  # 375 users
+    expected_churn_loss = 50000 * 0.05  # 2,500
+    expected_payback = 100 / (50 * 0.8)  # 2.5 months
+    
+    # Validation checks
+    validations = [
+        ("MRR", results['mrr'], expected_mrr),
+        ("ARR", results['arr'], expected_arr),
+        ("Actual LTV", results['ltv'], expected_actual_ltv),
+        ("LTV/CAC Ratio", results['ltv_cac_ratio'], expected_ltv_cac_ratio),
+        ("Runway", results['runway'], expected_runway),
+        ("Break Even Users", results['break_even_users'], expected_break_even),
+        ("Churn Loss", results['churn_loss'], expected_churn_loss),
+        ("Payback Period", results['payback_period'], expected_payback),
+    ]
+    
+    all_passed = True
+    for metric, actual, expected in validations:
+        if abs(actual - expected) < 0.01:  # Allow small rounding differences
+            print(f"✅ {metric}: {actual} (Expected: {expected})")
+        else:
+            print(f"❌ {metric}: {actual} (Expected: {expected}) - MISMATCH!")
+            all_passed = False
+    
+    # Additional validation checks
+    print(f"\n📊 Additional Metrics:")
+    print(f"Growth Efficiency: {results['growth_efficiency']}")
+    print(f"Growth Potential: {results['growth_potential']}")
+    print(f"Risk Score: {results['risk_score']}")
+    print(f"Profitability: {results['profitability']}")
+    print(f"Predicted Revenue: {results['predicted_revenue']}")
+    
+    if all_passed:
+        print(f"\n🎉 All core calculations PASSED! System is calculating correctly.")
+    else:
+        print(f"\n⚠️  Some calculations failed validation. Review formulas.")
+    
+    return all_passed
