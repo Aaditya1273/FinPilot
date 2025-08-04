@@ -668,6 +668,8 @@ class AdvancedCalculationSchema(Schema):
     monthly_expenses = fields.Float(required=True, validate=validate.Range(min=0, max=10000000))
     initial_capital = fields.Float(required=True, validate=validate.Range(min=0, max=100000000))
     cac = fields.Float(required=True, validate=validate.Range(min=0.01, max=10000))
+    monthly_growth = fields.Float(required=True, validate=validate.Range(min=0, max=100))
+    cogs = fields.Float(required=True, validate=validate.Range(min=0, max=100))
     market_segment = fields.String(load_default='B2B', validate=validate.OneOf(['B2B', 'B2C', 'B2B2C']))
     industry = fields.String(load_default='Technology')
     prediction_horizon = fields.Integer(load_default=12, validate=validate.Range(min=1, max=60))

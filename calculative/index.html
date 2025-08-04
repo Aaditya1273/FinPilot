@@ -148,15 +148,15 @@
                     this.API_ENDPOINT = 'http://127.0.0.1:5000/v2/calculate';
 
                     this.elements = {
-                        form: document.getElementById('financial-form'),
-                        resultsSection: document.getElementById('results-section'),
-                        metricsGrid: document.getElementById('metrics-grid'),
-                        recommendationsSection: document.getElementById('recommendations-section'),
-                        recommendationsContent: document.getElementById('recommendations-content'),
-                        chartsSection: document.getElementById('charts-section'),
-                        spinner: document.getElementById('spinner'),
-                        notification: document.getElementById('notification'),
-                    };
+                form: document.getElementById('financial-form'),
+                resultsSection: document.getElementById('results-section'),
+                metricsGrid: document.getElementById('metrics-grid'),
+                recommendationsSection: document.getElementById('recommendations-section'),
+                recommendationsContent: document.getElementById('recommendations-content'),
+                chartsSection: document.getElementById('charts-section'),
+                spinner: document.getElementById('spinner'),
+                notification: document.getElementById('notification-container'),
+            };
                     this.chartInstances = {};
                     this.bindEvents();
                 }
@@ -214,6 +214,8 @@
                         monthly_expenses: parseFloat(document.getElementById('monthly_expenses').value) || 0,
                         initial_capital: parseFloat(document.getElementById('initial_capital').value) || 0,
                         cac: cacValue,
+                        monthly_growth: parseFloat(document.getElementById('monthly_growth').value) || 0,
+                        cogs: parseFloat(document.getElementById('cogs').value) || 0,
                     };
 
                     try {
@@ -986,11 +988,20 @@
                 }
 
                 showNotification(message, type = 'info') {
-                    this.elements.notification.textContent = message;
-                    this.elements.notification.className = `notification ${type}`;
-                    this.elements.notification.style.display = 'block';
+                    // Clear any existing notifications
+                    this.elements.notification.innerHTML = '';
+                    
+                    // Create a new notification element
+                    const notificationElement = document.createElement('div');
+                    notificationElement.className = `notification ${type}`;
+                    notificationElement.textContent = message;
+                    
+                    // Add it to the container
+                    this.elements.notification.appendChild(notificationElement);
+                    
+                    // Remove after timeout
                     setTimeout(() => {
-                        this.elements.notification.style.display = 'none';
+                        notificationElement.remove();
                     }, 5000);
                 }
 
